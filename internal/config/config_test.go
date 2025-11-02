@@ -2,63 +2,70 @@ package config
 
 import (
 	"os"
-	"path/filepath"
 	"testing"
 )
 
 func TestLoad(t *testing.T) {
-	validConfig := `
-telegram:
-  user:
-    app_id: 12345
-    app_hash: "abcdef123456"
-    phone: "+1234567890"
-  bot:
-    token: "123456:ABC-DEF"
-    target_chat_id: 987654321
-api:
-  port: "8080"
-  token: "test-token"
-`
-
-	invalidConfig := `
-telegram:
-  user:
-    app_id: 0
-`
-
 	tests := []struct {
 		name    string
-		content string
+		envVars map[string]string
 		wantErr bool
 	}{
 		{
-			name:    "valid config",
-			content: validConfig,
+			name: "valid config",
+			envVars: map[string]string{
+				"TG_USER_APP_ID":        "12345",
+				"TG_USER_APP_HASH":      "abcdef123456",
+				"TG_USER_PHONE":         "+1234567890",
+				"TG_BOT_TOKEN":          "123456:ABC-DEF",
+				"TG_BOT_TARGET_CHAT_ID": "987654321",
+				"API_PORT":              "8080",
+				"API_TOKEN":             "test-token",
+			},
 			wantErr: false,
 		},
 		{
-			name:    "invalid yaml",
-			content: "invalid: [yaml",
+			name: "invalid app_id",
+			envVars: map[string]string{
+				"TG_USER_APP_ID":        "not-a-number",
+				"TG_USER_APP_HASH":      "abcdef123456",
+				"TG_USER_PHONE":         "+1234567890",
+				"TG_BOT_TOKEN":          "123456:ABC-DEF",
+				"TG_BOT_TARGET_CHAT_ID": "987654321",
+				"API_TOKEN":             "test-token",
+			},
 			wantErr: true,
 		},
 		{
-			name:    "missing required fields",
-			content: invalidConfig,
+			name: "missing required fields",
+			envVars: map[string]string{
+				"TG_USER_APP_ID": "12345",
+			},
 			wantErr: true,
+		},
+		{
+			name: "target username instead of chat_id",
+			envVars: map[string]string{
+				"TG_USER_APP_ID":         "12345",
+				"TG_USER_APP_HASH":       "abcdef123456",
+				"TG_USER_PHONE":          "+1234567890",
+				"TG_BOT_TOKEN":           "123456:ABC-DEF",
+				"TG_BOT_TARGET_USERNAME": "@testuser",
+				"API_TOKEN":              "test-token",
+			},
+			wantErr: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmpDir := t.TempDir()
-			configPath := filepath.Join(tmpDir, "config.yaml")
-
-			if err := os.WriteFile(configPath, []byte(tt.content), 0644); err != nil {
-				t.Fatalf("Failed to write test config: %v", err)
+			os.Clearenv()
+			for k, v := range tt.envVars {
+				os.Setenv(k, v)
 			}
+			defer os.Clearenv()
 
-			_, err := Load(configPath)
+			_, err := Load()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Load() error = %v, wantErr %v", err, tt.wantErr)
 			}

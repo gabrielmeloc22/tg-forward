@@ -26,4 +26,4 @@ WORKDIR /app
 EXPOSE 8080
 
 ENTRYPOINT ["/tg-forward"]
-CMD ["--config", "/app/configs/config.yaml", "--rules", "/app/configs/rules.json", "--port", "8080"]
+CMD ["--rules", "/app/configs/rules.json"]

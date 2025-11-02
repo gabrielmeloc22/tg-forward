@@ -3,54 +3,78 @@ package config
 import (
 	"fmt"
 	"os"
-
-	"gopkg.in/yaml.v3"
+	"strconv"
 )
 
 type Config struct {
-	Telegram TelegramConfig `yaml:"telegram"`
-	API      APIConfig      `yaml:"api"`
+	Telegram TelegramConfig
+	API      APIConfig
 }
 
 type TelegramConfig struct {
-	User UserConfig `yaml:"user"`
-	Bot  BotConfig  `yaml:"bot"`
+	User UserConfig
+	Bot  BotConfig
 }
 
 type UserConfig struct {
-	AppID       int    `yaml:"app_id"`
-	AppHash     string `yaml:"app_hash"`
-	Phone       string `yaml:"phone"`
-	SessionFile string `yaml:"session_file"`
+	AppID       int
+	AppHash     string
+	Phone       string
+	SessionFile string
+	Session     string
 }
 
 type BotConfig struct {
-	Token          string `yaml:"token"`
-	TargetChatID   int64  `yaml:"target_chat_id"`
-	TargetUsername string `yaml:"target_username"`
+	Token          string
+	TargetChatID   int64
+	TargetUsername string
 }
 
 type APIConfig struct {
-	Port  string `yaml:"port"`
-	Token string `yaml:"token"`
+	Port  string
+	Token string
 }
 
-func Load(configPath string) (*Config, error) {
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read config file: %w", err)
-	}
+func Load() (*Config, error) {
+	cfg := &Config{}
 
-	var cfg Config
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	appID, err := strconv.Atoi(getEnv("TG_USER_APP_ID", ""))
+	if err != nil {
+		return nil, fmt.Errorf("invalid TG_USER_APP_ID: must be a number")
 	}
+	cfg.Telegram.User.AppID = appID
+	cfg.Telegram.User.AppHash = getEnv("TG_USER_APP_HASH", "")
+	cfg.Telegram.User.Phone = getEnv("TG_USER_PHONE", "")
+	cfg.Telegram.User.SessionFile = getEnv("TG_USER_SESSION_FILE", "session.json")
+	cfg.Telegram.User.Session = getEnv("TG_USER_SESSION", "")
+
+	cfg.Telegram.Bot.Token = getEnv("TG_BOT_TOKEN", "")
+
+	targetChatID := getEnv("TG_BOT_TARGET_CHAT_ID", "")
+	if targetChatID != "" {
+		chatID, err := strconv.ParseInt(targetChatID, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid TG_BOT_TARGET_CHAT_ID: must be a number")
+		}
+		cfg.Telegram.Bot.TargetChatID = chatID
+	}
+	cfg.Telegram.Bot.TargetUsername = getEnv("TG_BOT_TARGET_USERNAME", "")
+
+	cfg.API.Port = getEnv("API_PORT", "8080")
+	cfg.API.Token = getEnv("API_TOKEN", "")
 
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
 
-	return &cfg, nil
+	return cfg, nil
+}
+
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
 }
 
 func (c *Config) Validate() error {

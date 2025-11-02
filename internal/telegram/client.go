@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"log"
 
@@ -14,28 +15,44 @@ import (
 type MessageHandler func(ctx context.Context, message *tg.Message) error
 
 type Client struct {
-	client      *telegram.Client
-	phone       string
-	handler     MessageHandler
-	api         *tg.Client
-	botID       int64
-	sessionPath string
+	client        *telegram.Client
+	phone         string
+	handler       MessageHandler
+	api           *tg.Client
+	botID         int64
+	sessionPath   string
+	sessionString string
 }
 
-func NewClient(appID int, appHash, phone string, handler MessageHandler, botID int64, sessionPath string) *Client {
+func NewClient(appID int, appHash, phone string, handler MessageHandler, botID int64, sessionPath, sessionString string) *Client {
 	return &Client{
-		phone:       phone,
-		handler:     handler,
-		botID:       botID,
-		sessionPath: sessionPath,
+		phone:         phone,
+		handler:       handler,
+		botID:         botID,
+		sessionPath:   sessionPath,
+		sessionString: sessionString,
 	}
 }
 
 func (c *Client) Run(ctx context.Context, appID int, appHash string) error {
 	dispatcher := tg.NewUpdateDispatcher()
+
+	var sessionStorage session.Storage
+	if c.sessionString != "" {
+		data, err := base64.StdEncoding.DecodeString(c.sessionString)
+		if err != nil {
+			return fmt.Errorf("failed to decode session string: %w", err)
+		}
+		sessionStorage = &sessionFromEnv{data: data}
+		log.Println("Using session from environment variable")
+	} else {
+		sessionStorage = &session.FileStorage{Path: c.sessionPath}
+		log.Printf("Using session file: %s", c.sessionPath)
+	}
+
 	client := telegram.NewClient(appID, appHash, telegram.Options{
 		UpdateHandler:  dispatcher,
-		SessionStorage: &session.FileStorage{Path: c.sessionPath},
+		SessionStorage: sessionStorage,
 	})
 	c.client = client
 
@@ -93,5 +110,18 @@ func (c *Client) authenticate(ctx context.Context) error {
 		return err
 	}
 
+	return nil
+}
+
+type sessionFromEnv struct {
+	data []byte
+}
+
+func (s *sessionFromEnv) LoadSession(ctx context.Context) ([]byte, error) {
+	return s.data, nil
+}
+
+func (s *sessionFromEnv) StoreSession(ctx context.Context, data []byte) error {
+	s.data = data
 	return nil
 }

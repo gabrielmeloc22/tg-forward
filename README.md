@@ -25,30 +25,40 @@ A Golang service that listens to your Telegram messages and forwards messages ma
 ### 2. Configure
 
 ```bash
-# Copy example config
-cp configs/config.example.yaml configs/config.yaml
+# Copy example env file
+cp .env.example .env
 
 # Edit with your credentials
-vim configs/config.yaml
+vim .env
 ```
 
-Example config:
-```yaml
-telegram:
-  user:
-    app_id: 12345678
-    app_hash: "your_api_hash_here"
-    phone: "+1234567890"
-    session_file: "session.json"  # Optional, defaults to session.json
-  
-  bot:
-    token: "123456789:ABCdefGHI..."
-    target_chat_id: 987654321
+Example `.env`:
+```env
+TG_USER_APP_ID=12345678
+TG_USER_APP_HASH=your_api_hash_here
+TG_USER_PHONE=+1234567890
+TG_USER_SESSION_FILE=session.json
+TG_USER_SESSION=
 
-api:
-  port: "8080"
-  token: "your-secret-api-token"  # Required for API authentication
+TG_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrsTUVwxyz
+TG_BOT_TARGET_CHAT_ID=987654321
+TG_BOT_TARGET_USERNAME=
+
+API_PORT=8080
+API_TOKEN=your-secret-api-token-here
 ```
+
+**Environment Variables:**
+- `TG_USER_APP_ID`: Your Telegram app ID (from https://my.telegram.org)
+- `TG_USER_APP_HASH`: Your Telegram app hash
+- `TG_USER_PHONE`: Your phone number (with country code)
+- `TG_USER_SESSION_FILE`: Path to session file (default: `session.json`)
+- `TG_USER_SESSION`: Base64-encoded session string (optional, see Session Management below)
+- `TG_BOT_TOKEN`: Your bot token (from @BotFather)
+- `TG_BOT_TARGET_CHAT_ID`: Target chat ID to forward messages to
+- `TG_BOT_TARGET_USERNAME`: Alternative to chat ID, use username (e.g., `@channel`)
+- `API_PORT`: HTTP API port (default: `8080`)
+- `API_TOKEN`: Secret token for API authentication
 
 ### 3. Run
 
@@ -60,13 +70,28 @@ go run cmd/tg-forward/main.go
 **Docker:**
 ```bash
 docker build -t tg-forward .
-docker run -d -p 8080:8080 -v $(pwd)/configs:/app/configs tg-forward
+docker run -d -p 8080:8080 \
+  --env-file .env \
+  -v $(pwd)/configs:/app/configs \
+  tg-forward
 ```
 
 **First Run:**
-On first run, you'll be prompted to enter the 2FA code sent to your Telegram. After successful authentication, the session is saved to `session.json` (or the path specified in config). Subsequent runs will use this session file without requiring 2FA.
+On first run, you'll be prompted to enter the 2FA code sent to your Telegram. After successful authentication, the session is saved to `session.json` (or the path specified in `TG_USER_SESSION_FILE`). Subsequent runs will use this session file without requiring 2FA.
 
-**Note:** Forwarding rules are NOT stored in `config.yaml`. Use the API to manage rules (stored in `rules.json`) or manually create a `rules.json` file with your initial rules:
+### Session Management
+
+**For Fly.io or other cloud deployments**, you can use the `TG_USER_SESSION` environment variable instead of a session file:
+
+1. Run the app locally first to authenticate and generate `session.json`
+2. Convert the session file to base64:
+   ```bash
+   base64 -i session.json
+   ```
+3. Copy the output and set it as `TG_USER_SESSION` in your deployment environment
+4. The app will use the session from the environment variable instead of requiring terminal input
+
+**Note:** Forwarding rules are NOT stored in `.env`. Use the API to manage rules (stored in `rules.json`) or manually create a `rules.json` file with your initial rules:
 
 ```json
 {
