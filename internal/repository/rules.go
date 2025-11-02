@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/google/uuid"
@@ -60,6 +61,11 @@ func (r *RulesRepository) save() error {
 	data, err := json.MarshalIndent(r.rules, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal rules: %w", err)
+	}
+
+	dir := filepath.Dir(r.filePath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
 	if err := os.WriteFile(r.filePath, data, 0644); err != nil {
