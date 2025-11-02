@@ -20,7 +20,7 @@ FROM scratch
 COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /build/tg-forward /tg-forward
-COPY --from=builder /build/web /web
+COPY --from=builder /build/web /app/web
 
 WORKDIR /app
 

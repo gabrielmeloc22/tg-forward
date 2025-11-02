@@ -17,6 +17,12 @@ func healthHandler(w http.ResponseWriter, r *http.Request) (*DataResponse, *Erro
 func adminHandler(w http.ResponseWriter, r *http.Request) {
 	wd, _ := os.Getwd()
 	htmlPath := filepath.Join(wd, "web", "admin.html")
+
+	if _, err := os.Stat(htmlPath); os.IsNotExist(err) {
+		http.Error(w, "Admin panel not found. Looking for: "+htmlPath, http.StatusNotFound)
+		return
+	}
+
 	http.ServeFile(w, r, htmlPath)
 }
 
