@@ -76,8 +76,26 @@ func TestMatcher_Match(t *testing.T) {
 		},
 		{
 			name:     "case sensitive",
-			patterns: []string{"Hello"},
-			text:     "hello",
+			patterns: []string{"hello"},
+			text:     "Hello",
+			want:     true,
+		},
+		{
+			name:     "text with special chars",
+			patterns: []string{"helloworld"},
+			text:     "Hello~World!",
+			want:     true,
+		},
+		{
+			name:     "text with apostrophe",
+			patterns: []string{"dont"},
+			text:     "Don't",
+			want:     true,
+		},
+		{
+			name:     "text with tilde",
+			patterns: []string{"cafe"},
+			text:     "Café~",
 			want:     false,
 		},
 	}
