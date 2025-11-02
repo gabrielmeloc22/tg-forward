@@ -39,10 +39,57 @@
                     <button onclick="showAddForm()" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition">
                         + Add Rule
                     </button>
+                    <button onclick="showBulkCreateForm()" class="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition">
+                        Bulk Create
+                    </button>
                     <button onclick="logout()" class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition">
                         Logout
                     </button>
                 </div>
+            </div>
+
+            <div id="bulk-create-form" class="hidden mb-6 bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-semibold mb-4 text-gray-800">Bulk Create Rules</h2>
+                <form id="bulk-form" class="space-y-4">
+                    <div id="bulk-rules-container" class="space-y-4">
+                    </div>
+                    <div class="flex justify-between items-center pt-2 border-t border-gray-200">
+                        <button type="button" onclick="addBulkRuleRow()" class="text-blue-600 hover:text-blue-800 font-medium text-sm">
+                            + Add Another Rule
+                        </button>
+                        <span class="text-sm text-gray-500" id="bulk-count">0 rules</span>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button type="submit" class="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition">
+                            Create All Rules
+                        </button>
+                        <button type="button" onclick="hideBulkCreateForm()" class="bg-gray-400 text-white px-4 py-2 rounded-md hover:bg-gray-500 transition">
+                            Cancel
+                        </button>
+                    </div>
+                    <div id="bulk-error" class="text-red-600 text-sm hidden"></div>
+                    <div id="bulk-progress" class="hidden">
+                        <div class="bg-blue-50 border border-blue-200 rounded-md p-3">
+                            <div class="text-sm text-blue-800 mb-2" id="bulk-status">Processing...</div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div id="bulk-progress-bar" class="bg-blue-600 h-2 rounded-full transition-all" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="bulk-results" class="hidden">
+                        <div class="bg-green-50 border border-green-200 rounded-md p-3">
+                            <div class="text-sm text-green-800">
+                                <strong>Success:</strong> <span id="bulk-success-count">0</span> rules created
+                            </div>
+                        </div>
+                        <div id="bulk-errors-container" class="hidden mt-2 bg-red-50 border border-red-200 rounded-md p-3">
+                            <div class="text-sm text-red-800">
+                                <strong>Failed:</strong> <span id="bulk-failed-count">0</span> rules
+                                <ul id="bulk-error-list" class="mt-2 list-disc list-inside text-xs"></ul>
+                            </div>
+                        </div>
+                    </div>
+                </form>
             </div>
 
             <div id="add-form" class="hidden mb-6 bg-white rounded-lg shadow-md p-6">
@@ -174,7 +221,9 @@
                 return;
             }
 
-            container.innerHTML = rules.map(rule => `
+            const sortedRules = [...rules].reverse();
+
+            container.innerHTML = sortedRules.map(rule => `
                 <div class="rule-card bg-white rounded-lg shadow-md p-6">
                     <div class="flex justify-between items-start mb-3">
                         <h3 class="text-xl font-semibold text-gray-800">${escapeHtml(rule.name)}</h3>
@@ -264,17 +313,13 @@
             try {
                 let response;
                 if (editId) {
-                    payload.id = editId;
-                    const allRules = await getAllRules();
-                    const updatedRules = allRules.map(r => r.id === editId ? payload : r);
-                    
-                    response = await fetch(`${API_BASE}/rules`, {
-                        method: 'PUT',
+                    response = await fetch(`${API_BASE}/rules/${editId}`, {
+                        method: 'PATCH',
                         headers: {
                             'Authorization': `Bearer ${currentToken}`,
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ rules: updatedRules })
+                        body: JSON.stringify(payload)
                     });
                 } else {
                     response = await fetch(`${API_BASE}/rules/add`, {
@@ -336,6 +381,178 @@
             } catch (error) {
                 alert(`Error deleting rule: ${error.message}`);
             }
+        }
+
+        let bulkRuleCounter = 0;
+
+        function showBulkCreateForm() {
+            document.getElementById('bulk-create-form').classList.remove('hidden');
+            document.getElementById('bulk-form').reset();
+            document.getElementById('bulk-error').classList.add('hidden');
+            document.getElementById('bulk-progress').classList.add('hidden');
+            document.getElementById('bulk-results').classList.add('hidden');
+            document.getElementById('bulk-rules-container').innerHTML = '';
+            bulkRuleCounter = 0;
+            addBulkRuleRow();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function hideBulkCreateForm() {
+            document.getElementById('bulk-create-form').classList.add('hidden');
+            document.getElementById('bulk-form').reset();
+            document.getElementById('bulk-rules-container').innerHTML = '';
+            bulkRuleCounter = 0;
+        }
+
+        function addBulkRuleRow() {
+            const container = document.getElementById('bulk-rules-container');
+            const id = bulkRuleCounter++;
+            
+            const ruleDiv = document.createElement('div');
+            ruleDiv.id = `bulk-rule-${id}`;
+            ruleDiv.className = 'bg-gray-50 border border-gray-200 rounded-lg p-4 relative';
+            ruleDiv.innerHTML = `
+                <button type="button" onclick="removeBulkRuleRow(${id})" 
+                        class="absolute top-2 right-2 text-gray-400 hover:text-red-600 transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+                <div class="space-y-3 pr-8">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Rule Name *</label>
+                        <input type="text" id="bulk-name-${id}" placeholder="e.g., Payment Alerts"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm">
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Regex Pattern</label>
+                            <input type="text" id="bulk-pattern-${id}" placeholder="e.g., urgent.*|emergency.*"
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Keywords (comma-separated)</label>
+                            <input type="text" id="bulk-keywords-${id}" placeholder="e.g., payment, received"
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm">
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-500 italic">At least one of Pattern or Keywords is required</p>
+                </div>
+            `;
+            
+            container.appendChild(ruleDiv);
+            updateBulkCount();
+        }
+
+        function removeBulkRuleRow(id) {
+            const element = document.getElementById(`bulk-rule-${id}`);
+            if (element) {
+                element.remove();
+                updateBulkCount();
+            }
+        }
+
+        function updateBulkCount() {
+            const count = document.getElementById('bulk-rules-container').children.length;
+            document.getElementById('bulk-count').textContent = `${count} rule${count !== 1 ? 's' : ''}`;
+        }
+
+        document.getElementById('bulk-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const container = document.getElementById('bulk-rules-container');
+            const ruleDivs = container.children;
+            
+            if (ruleDivs.length === 0) {
+                showBulkError('Please add at least one rule');
+                return;
+            }
+
+            const rules = [];
+            for (let i = 0; i < ruleDivs.length; i++) {
+                const div = ruleDivs[i];
+                const id = div.id.replace('bulk-rule-', '');
+                
+                const name = document.getElementById(`bulk-name-${id}`).value.trim();
+                const pattern = document.getElementById(`bulk-pattern-${id}`).value.trim();
+                const keywordsInput = document.getElementById(`bulk-keywords-${id}`).value.trim();
+                const keywords = keywordsInput ? keywordsInput.split(',').map(k => k.trim()).filter(k => k) : [];
+                
+                if (!name) {
+                    showBulkError(`Rule ${i + 1}: Name is required`);
+                    return;
+                }
+                
+                if (!pattern && keywords.length === 0) {
+                    showBulkError(`Rule ${i + 1} ("${name}"): Must have either pattern or keywords`);
+                    return;
+                }
+                
+                const rule = { name };
+                if (pattern) rule.pattern = pattern;
+                if (keywords.length > 0) rule.keywords = keywords;
+                rules.push(rule);
+            }
+
+            document.getElementById('bulk-error').classList.add('hidden');
+            document.getElementById('bulk-progress').classList.remove('hidden');
+            document.getElementById('bulk-results').classList.add('hidden');
+
+            let successCount = 0;
+            let failedCount = 0;
+            const errors = [];
+
+            for (let i = 0; i < rules.length; i++) {
+                const rule = rules[i];
+                const progress = ((i + 1) / rules.length) * 100;
+                document.getElementById('bulk-progress-bar').style.width = `${progress}%`;
+                document.getElementById('bulk-status').textContent = `Processing rule ${i + 1} of ${rules.length}...`;
+
+                try {
+                    const response = await fetch(`${API_BASE}/rules/add`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${currentToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(rule)
+                    });
+
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.error || 'Failed to create rule');
+                    }
+
+                    successCount++;
+                } catch (error) {
+                    failedCount++;
+                    errors.push(`Rule "${rule.name}": ${error.message}`);
+                }
+            }
+
+            document.getElementById('bulk-progress').classList.add('hidden');
+            document.getElementById('bulk-results').classList.remove('hidden');
+            document.getElementById('bulk-success-count').textContent = successCount;
+
+            if (failedCount > 0) {
+                document.getElementById('bulk-failed-count').textContent = failedCount;
+                document.getElementById('bulk-errors-container').classList.remove('hidden');
+                const errorList = document.getElementById('bulk-error-list');
+                errorList.innerHTML = errors.map(e => `<li>${escapeHtml(e)}</li>`).join('');
+            } else {
+                document.getElementById('bulk-errors-container').classList.add('hidden');
+            }
+
+            if (successCount > 0) {
+                loadRules();
+                hideBulkCreateForm();
+            }
+        });
+
+        function showBulkError(message) {
+            const errorDiv = document.getElementById('bulk-error');
+            errorDiv.textContent = message;
+            errorDiv.classList.remove('hidden');
         }
     </script>
 </body>

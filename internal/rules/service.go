@@ -99,6 +99,34 @@ func (s *Service) RemoveRule(id string) error {
 	return nil
 }
 
+func (s *Service) UpdateRule(id, name, pattern string, keywords []string) (*Rule, error) {
+	if name == "" {
+		return nil, fmt.Errorf("rule name is required")
+	}
+
+	if pattern != "" {
+		if err := s.validatePattern(pattern); err != nil {
+			return nil, err
+		}
+	} else if len(keywords) == 0 {
+		return nil, fmt.Errorf("rule must have either pattern or keywords")
+	}
+
+	rule, err := s.repo.UpdateRule(id, name, pattern, keywords)
+	if err != nil {
+		return nil, err
+	}
+
+	patterns, _ := s.repo.GetPatterns()
+	newMatcher, err := matcher.New(patterns)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update matcher: %w", err)
+	}
+	s.matcher = newMatcher
+
+	return rule, nil
+}
+
 func (s *Service) GetMatcher() *matcher.Matcher {
 	return s.matcher
 }

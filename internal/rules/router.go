@@ -42,6 +42,7 @@ func NewRouter(svc *Service, apiToken string) *chi.Mux {
 			r.Put("/", WrapWithBody(rulesHandler.UpdateRules))
 			r.Post("/add", WrapWithBody(rulesHandler.AddRule))
 			r.Delete("/remove", WrapWithBody(rulesHandler.RemoveRule))
+			r.Patch("/{id}", WrapWithBodyAndID(rulesHandler.UpdateRule))
 		})
 	})
 

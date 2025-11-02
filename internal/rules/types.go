@@ -30,6 +30,12 @@ type RemoveRuleRequest struct {
 	ID string `json:"id"`
 }
 
+type UpdateRuleRequest struct {
+	Name     string   `json:"name"`
+	Pattern  string   `json:"pattern"`
+	Keywords []string `json:"keywords"`
+}
+
 type ErrorResponse struct {
 	Error string `json:"error"`
 }

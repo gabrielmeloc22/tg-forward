@@ -403,3 +403,187 @@ func TestUpdateRulesHandler(t *testing.T) {
 		require.Equal(t, "INVALID_RULES", body.Code)
 	})
 }
+
+func TestUpdateRuleHandler(t *testing.T) {
+	initialPatterns := []string{"test.*"}
+	r, repo, cleanup := setupRouter(t, initialPatterns)
+	defer cleanup()
+
+	t.Run("should update existing rule", func(t *testing.T) {
+		existingRules, err := repo.GetRules()
+		require.NoError(t, err)
+		require.NotEmpty(t, existingRules)
+
+		ruleToUpdate := existingRules[0]
+
+		reqBody := rules.UpdateRuleRequest{
+			Name:    "Updated Rule",
+			Pattern: "updated.*",
+		}
+
+		req := testutils.NewAuthenticatedRequest(
+			t,
+			"PATCH",
+			"/rules/"+ruleToUpdate.ID,
+			testutils.MarshallBody(t, reqBody),
+			testAPIToken,
+		)
+
+		res := testutils.ExecuteRequest(req, r)
+
+		body := testutils.UnmarshallReqBody[rules.DataResponse](t, res.Body)
+
+		require.Equal(t, http.StatusOK, res.Code)
+
+		dataMap, ok := body.Data.(map[string]interface{})
+		require.True(t, ok)
+
+		ruleMap, ok := dataMap["rule"].(map[string]interface{})
+		require.True(t, ok)
+		require.Equal(t, "Updated Rule", ruleMap["name"])
+		require.Equal(t, "updated.*", ruleMap["pattern"])
+		require.Equal(t, ruleToUpdate.ID, ruleMap["id"])
+	})
+
+	t.Run("should update rule with keywords", func(t *testing.T) {
+		existingRules, err := repo.GetRules()
+		require.NoError(t, err)
+		require.NotEmpty(t, existingRules)
+
+		ruleToUpdate := existingRules[0]
+
+		reqBody := rules.UpdateRuleRequest{
+			Name:     "Updated Keyword Rule",
+			Keywords: []string{"urgent", "critical"},
+		}
+
+		req := testutils.NewAuthenticatedRequest(
+			t,
+			"PATCH",
+			"/rules/"+ruleToUpdate.ID,
+			testutils.MarshallBody(t, reqBody),
+			testAPIToken,
+		)
+
+		res := testutils.ExecuteRequest(req, r)
+
+		body := testutils.UnmarshallReqBody[rules.DataResponse](t, res.Body)
+
+		require.Equal(t, http.StatusOK, res.Code)
+
+		dataMap, ok := body.Data.(map[string]interface{})
+		require.True(t, ok)
+
+		ruleMap, ok := dataMap["rule"].(map[string]interface{})
+		require.True(t, ok)
+		require.Equal(t, "Updated Keyword Rule", ruleMap["name"])
+
+		keywordsArray, ok := ruleMap["keywords"].([]interface{})
+		require.True(t, ok)
+		require.Equal(t, 2, len(keywordsArray))
+	})
+
+	t.Run("should return 400 for invalid pattern", func(t *testing.T) {
+		existingRules, err := repo.GetRules()
+		require.NoError(t, err)
+		require.NotEmpty(t, existingRules)
+
+		ruleToUpdate := existingRules[0]
+
+		reqBody := rules.UpdateRuleRequest{
+			Name:    "Bad Pattern",
+			Pattern: "[unclosed",
+		}
+
+		req := testutils.NewAuthenticatedRequest(
+			t,
+			"PATCH",
+			"/rules/"+ruleToUpdate.ID,
+			testutils.MarshallBody(t, reqBody),
+			testAPIToken,
+		)
+
+		res := testutils.ExecuteRequest(req, r)
+
+		body := testutils.UnmarshallReqBody[rules.ApiErrorResponse](t, res.Body)
+
+		require.Equal(t, http.StatusBadRequest, res.Code)
+		require.Equal(t, "INVALID_RULE", body.Code)
+	})
+
+	t.Run("should return 400 when name is missing", func(t *testing.T) {
+		existingRules, err := repo.GetRules()
+		require.NoError(t, err)
+		require.NotEmpty(t, existingRules)
+
+		ruleToUpdate := existingRules[0]
+
+		reqBody := rules.UpdateRuleRequest{
+			Pattern: "test.*",
+		}
+
+		req := testutils.NewAuthenticatedRequest(
+			t,
+			"PATCH",
+			"/rules/"+ruleToUpdate.ID,
+			testutils.MarshallBody(t, reqBody),
+			testAPIToken,
+		)
+
+		res := testutils.ExecuteRequest(req, r)
+
+		body := testutils.UnmarshallReqBody[rules.ApiErrorResponse](t, res.Body)
+
+		require.Equal(t, http.StatusBadRequest, res.Code)
+		require.Equal(t, "INVALID_RULE", body.Code)
+	})
+
+	t.Run("should return 400 when neither pattern nor keywords provided", func(t *testing.T) {
+		existingRules, err := repo.GetRules()
+		require.NoError(t, err)
+		require.NotEmpty(t, existingRules)
+
+		ruleToUpdate := existingRules[0]
+
+		reqBody := rules.UpdateRuleRequest{
+			Name: "Empty Rule",
+		}
+
+		req := testutils.NewAuthenticatedRequest(
+			t,
+			"PATCH",
+			"/rules/"+ruleToUpdate.ID,
+			testutils.MarshallBody(t, reqBody),
+			testAPIToken,
+		)
+
+		res := testutils.ExecuteRequest(req, r)
+
+		body := testutils.UnmarshallReqBody[rules.ApiErrorResponse](t, res.Body)
+
+		require.Equal(t, http.StatusBadRequest, res.Code)
+		require.Equal(t, "INVALID_RULE", body.Code)
+	})
+
+	t.Run("should return 400 for nonexistent rule", func(t *testing.T) {
+		reqBody := rules.UpdateRuleRequest{
+			Name:    "Test",
+			Pattern: "test.*",
+		}
+
+		req := testutils.NewAuthenticatedRequest(
+			t,
+			"PATCH",
+			"/rules/nonexistent-id",
+			testutils.MarshallBody(t, reqBody),
+			testAPIToken,
+		)
+
+		res := testutils.ExecuteRequest(req, r)
+
+		body := testutils.UnmarshallReqBody[rules.ApiErrorResponse](t, res.Body)
+
+		require.Equal(t, http.StatusBadRequest, res.Code)
+		require.Equal(t, "INVALID_RULE", body.Code)
+	})
+}

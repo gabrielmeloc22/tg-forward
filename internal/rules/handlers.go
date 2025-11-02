@@ -49,3 +49,13 @@ func (h *Handler) RemoveRule(w http.ResponseWriter, r *http.Request, body *Remov
 	log.Printf("Rule removed: %s", body.ID)
 	return &DataResponse{Data: map[string]string{"message": "rule deleted successfully"}}, nil
 }
+
+func (h *Handler) UpdateRule(w http.ResponseWriter, r *http.Request, id string, body *UpdateRuleRequest) (*DataResponse, *Error) {
+	rule, err := h.service.UpdateRule(id, body.Name, body.Pattern, body.Keywords)
+	if err != nil {
+		return nil, NewError(http.StatusBadRequest, "INVALID_RULE", err.Error())
+	}
+
+	log.Printf("Rule updated: %s (ID: %s)", rule.Name, rule.ID)
+	return &DataResponse{Data: RuleResponse{Rule: *rule}}, nil
+}

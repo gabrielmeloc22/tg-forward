@@ -138,6 +138,40 @@ func (r *Repository) RemoveRule(id string) error {
 	return nil
 }
 
+func (r *Repository) UpdateRule(id, name, pattern string, keywords []string) (*Rule, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	update := bson.M{
+		"$set": bson.M{
+			"name":     name,
+			"pattern":  pattern,
+			"keywords": keywords,
+		},
+	}
+
+	result := r.collection.FindOneAndUpdate(
+		ctx,
+		bson.M{"_id": id},
+		update,
+	)
+
+	if result.Err() != nil {
+		if result.Err() == mongo.ErrNoDocuments {
+			return nil, fmt.Errorf("rule not found: %s", id)
+		}
+		return nil, fmt.Errorf("failed to update rule: %w", result.Err())
+	}
+
+	var updatedRule Rule
+	err := r.collection.FindOne(ctx, bson.M{"_id": id}).Decode(&updatedRule)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve updated rule: %w", err)
+	}
+
+	return &updatedRule, nil
+}
+
 func (r *Repository) GetPatterns() ([]matcher.MatchRule, error) {
 	rules, err := r.GetRules()
 	if err != nil {
