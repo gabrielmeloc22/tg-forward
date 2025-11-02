@@ -1,0 +1,15 @@
+telegram:
+  user:
+    app_id: 12345678
+    app_hash: "your_api_hash_here"
+    phone: "+1234567890"
+    session_file: "session.json"  # Optional, defaults to session.json
+  
+  bot:
+    token: "123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+    target_chat_id: 987654321
+    target_username: ""
+
+api:
+  port: "8080"
+  token: "your-secret-api-token-here"

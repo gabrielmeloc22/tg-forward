@@ -1,0 +1,15 @@
+.git
+.gitignore
+README.md
+.env
+*.md
+configs/*.yaml
+configs/*.json
+!configs/*.example.yaml
+.vscode
+.idea
+*.log
+tmp/
+vendor/
+*.test
+coverage.*
