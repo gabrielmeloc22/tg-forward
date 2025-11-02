@@ -115,7 +115,7 @@ func NewFixture(t *testing.T, client *mongo.Client, database string, apiToken st
 	require.NoError(t, err)
 
 	for _, pattern := range initialPatterns {
-		_, err := rulesRepo.AddRule("test-rule", pattern)
+		_, err := rulesRepo.AddRule("test-rule", pattern, nil)
 		require.NoError(t, err)
 	}
 

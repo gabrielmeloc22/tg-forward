@@ -21,8 +21,9 @@ type UpdateRulesRequest struct {
 }
 
 type AddRuleRequest struct {
-	Name    string `json:"name"`
-	Pattern string `json:"pattern"`
+	Name     string   `json:"name"`
+	Pattern  string   `json:"pattern"`
+	Keywords []string `json:"keywords"`
 }
 
 type RemoveRuleRequest struct {

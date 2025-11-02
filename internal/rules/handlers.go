@@ -31,7 +31,7 @@ func (h *Handler) UpdateRules(w http.ResponseWriter, r *http.Request, body *Upda
 }
 
 func (h *Handler) AddRule(w http.ResponseWriter, r *http.Request, body *AddRuleRequest) (*DataResponse, *Error) {
-	rule, err := h.service.AddRule(body.Name, body.Pattern)
+	rule, err := h.service.AddRule(body.Name, body.Pattern, body.Keywords)
 	if err != nil {
 		return nil, NewError(http.StatusBadRequest, "INVALID_RULE", err.Error())
 	}

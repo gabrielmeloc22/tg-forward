@@ -184,6 +184,93 @@ func TestAddRuleHandler(t *testing.T) {
 		require.Equal(t, http.StatusBadRequest, res.Code)
 		require.Equal(t, "INVALID_RULE", body.Code)
 	})
+
+	t.Run("should add rule with keywords only", func(t *testing.T) {
+		reqBody := rules.AddRuleRequest{
+			Name:     "Keyword Rule",
+			Keywords: []string{"urgent", "alert"},
+		}
+
+		req := testutils.NewAuthenticatedRequest(
+			t,
+			"POST",
+			"/rules/add",
+			testutils.MarshallBody(t, reqBody),
+			testAPIToken,
+		)
+
+		res := testutils.ExecuteRequest(req, r)
+
+		body := testutils.UnmarshallReqBody[rules.DataResponse](t, res.Body)
+
+		require.Equal(t, http.StatusOK, res.Code)
+
+		dataMap, ok := body.Data.(map[string]interface{})
+		require.True(t, ok)
+
+		ruleMap, ok := dataMap["rule"].(map[string]interface{})
+		require.True(t, ok)
+		require.Equal(t, "Keyword Rule", ruleMap["name"])
+		require.NotEmpty(t, ruleMap["id"])
+
+		keywordsArray, ok := ruleMap["keywords"].([]interface{})
+		require.True(t, ok)
+		require.Equal(t, 2, len(keywordsArray))
+	})
+
+	t.Run("should add rule with both pattern and keywords", func(t *testing.T) {
+		reqBody := rules.AddRuleRequest{
+			Name:     "Mixed Rule",
+			Pattern:  "important.*",
+			Keywords: []string{"critical", "urgent"},
+		}
+
+		req := testutils.NewAuthenticatedRequest(
+			t,
+			"POST",
+			"/rules/add",
+			testutils.MarshallBody(t, reqBody),
+			testAPIToken,
+		)
+
+		res := testutils.ExecuteRequest(req, r)
+
+		body := testutils.UnmarshallReqBody[rules.DataResponse](t, res.Body)
+
+		require.Equal(t, http.StatusOK, res.Code)
+
+		dataMap, ok := body.Data.(map[string]interface{})
+		require.True(t, ok)
+
+		ruleMap, ok := dataMap["rule"].(map[string]interface{})
+		require.True(t, ok)
+		require.Equal(t, "Mixed Rule", ruleMap["name"])
+		require.Equal(t, "important.*", ruleMap["pattern"])
+		require.NotEmpty(t, ruleMap["id"])
+
+		keywordsArray, ok := ruleMap["keywords"].([]interface{})
+		require.True(t, ok)
+		require.Equal(t, 2, len(keywordsArray))
+	})
+
+	t.Run("should return 400 when neither pattern nor keywords provided", func(t *testing.T) {
+		reqBody := rules.AddRuleRequest{Name: "Empty Rule"}
+
+		req := testutils.NewAuthenticatedRequest(
+			t,
+			"POST",
+			"/rules/add",
+			testutils.MarshallBody(t, reqBody),
+			testAPIToken,
+		)
+
+		res := testutils.ExecuteRequest(req, r)
+
+		body := testutils.UnmarshallReqBody[rules.ApiErrorResponse](t, res.Body)
+
+		require.Equal(t, http.StatusBadRequest, res.Code)
+		require.Equal(t, "INVALID_RULE", body.Code)
+	})
 }
 
 func TestRemoveRuleHandler(t *testing.T) {

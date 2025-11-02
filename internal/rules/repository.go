@@ -5,15 +5,17 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/gabrielmelo/tg-forward/internal/matcher"
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type Rule struct {
-	ID      string `json:"id" bson:"_id"`
-	Name    string `json:"name" bson:"name"`
-	Pattern string `json:"pattern" bson:"pattern"`
+	ID       string   `json:"id" bson:"_id"`
+	Name     string   `json:"name" bson:"name"`
+	Pattern  string   `json:"pattern,omitempty" bson:"pattern,omitempty"`
+	Keywords []string `json:"keywords,omitempty" bson:"keywords,omitempty"`
 }
 
 type Repository struct {
@@ -101,14 +103,15 @@ func (r *Repository) SetRules(rules []Rule) error {
 	return nil
 }
 
-func (r *Repository) AddRule(name, pattern string) (*Rule, error) {
+func (r *Repository) AddRule(name, pattern string, keywords []string) (*Rule, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	rule := Rule{
-		ID:      generateID(),
-		Name:    name,
-		Pattern: pattern,
+		ID:       generateID(),
+		Name:     name,
+		Pattern:  pattern,
+		Keywords: keywords,
 	}
 
 	_, err := r.collection.InsertOne(ctx, rule)
@@ -135,18 +138,21 @@ func (r *Repository) RemoveRule(id string) error {
 	return nil
 }
 
-func (r *Repository) GetPatterns() ([]string, error) {
+func (r *Repository) GetPatterns() ([]matcher.MatchRule, error) {
 	rules, err := r.GetRules()
 	if err != nil {
 		return nil, err
 	}
 
-	patterns := make([]string, len(rules))
+	matchRules := make([]matcher.MatchRule, len(rules))
 	for i, rule := range rules {
-		patterns[i] = rule.Pattern
+		matchRules[i] = matcher.MatchRule{
+			Pattern:  rule.Pattern,
+			Keywords: rule.Keywords,
+		}
 	}
 
-	return patterns, nil
+	return matchRules, nil
 }
 
 func (r *Repository) Close() error {

@@ -29,19 +29,25 @@ func (s *Service) UpdateRules(rules []Rule) ([]Rule, error) {
 		return nil, fmt.Errorf("at least one rule is required")
 	}
 
-	patterns := make([]string, len(rules))
+	matchRules := make([]matcher.MatchRule, len(rules))
 	for i, rule := range rules {
-		if err := s.validatePattern(rule.Pattern); err != nil {
-			return nil, err
+		if rule.Pattern != "" {
+			if err := s.validatePattern(rule.Pattern); err != nil {
+				return nil, err
+			}
+			matchRules[i] = matcher.MatchRule{Pattern: rule.Pattern}
+		} else if len(rule.Keywords) > 0 {
+			matchRules[i] = matcher.MatchRule{Keywords: rule.Keywords}
+		} else {
+			return nil, fmt.Errorf("rule must have either pattern or keywords")
 		}
-		patterns[i] = rule.Pattern
 	}
 
 	if err := s.repo.SetRules(rules); err != nil {
 		return nil, fmt.Errorf("failed to save rules: %w", err)
 	}
 
-	newMatcher, err := matcher.New(patterns)
+	newMatcher, err := matcher.New(matchRules)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create matcher: %w", err)
 	}
@@ -50,22 +56,26 @@ func (s *Service) UpdateRules(rules []Rule) ([]Rule, error) {
 	return rules, nil
 }
 
-func (s *Service) AddRule(name, pattern string) (*Rule, error) {
-	if err := s.validatePattern(pattern); err != nil {
-		return nil, err
+func (s *Service) AddRule(name, pattern string, keywords []string) (*Rule, error) {
+	if pattern != "" {
+		if err := s.validatePattern(pattern); err != nil {
+			return nil, err
+		}
+	} else if len(keywords) == 0 {
+		return nil, fmt.Errorf("rule must have either pattern or keywords")
 	}
 
 	if name == "" {
 		return nil, fmt.Errorf("rule name is required")
 	}
 
-	rule, err := s.repo.AddRule(name, pattern)
+	rule, err := s.repo.AddRule(name, pattern, keywords)
 	if err != nil {
 		return nil, fmt.Errorf("failed to add rule: %w", err)
 	}
 
-	patterns, _ := s.repo.GetPatterns()
-	newMatcher, err := matcher.New(patterns)
+	matchRules, _ := s.repo.GetPatterns()
+	newMatcher, err := matcher.New(matchRules)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update matcher: %w", err)
 	}

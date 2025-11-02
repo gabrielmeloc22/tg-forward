@@ -6,20 +6,38 @@ import (
 	"unicode"
 )
 
-type Matcher struct {
-	patterns []*regexp.Regexp
+type MatchRule struct {
+	Pattern  string
+	Keywords []string
 }
 
-func New(patterns []string) (*Matcher, error) {
-	compiled := make([]*regexp.Regexp, 0, len(patterns))
-	for _, pattern := range patterns {
-		re, err := regexp.Compile(pattern)
-		if err != nil {
-			return nil, err
+type Matcher struct {
+	patterns       []*regexp.Regexp
+	keywordMatches [][]string
+}
+
+func New(rules []MatchRule) (*Matcher, error) {
+	patterns := make([]*regexp.Regexp, 0)
+	keywords := make([][]string, 0)
+
+	for _, rule := range rules {
+		if rule.Pattern != "" {
+			re, err := regexp.Compile(rule.Pattern)
+			if err != nil {
+				return nil, err
+			}
+			patterns = append(patterns, re)
+			keywords = append(keywords, nil)
+		} else if len(rule.Keywords) > 0 {
+			patterns = append(patterns, nil)
+			keywords = append(keywords, rule.Keywords)
 		}
-		compiled = append(compiled, re)
 	}
-	return &Matcher{patterns: compiled}, nil
+
+	return &Matcher{
+		patterns:       patterns,
+		keywordMatches: keywords,
+	}, nil
 }
 
 func normalizeText(text string) string {
@@ -39,9 +57,16 @@ func normalizeText(text string) string {
 
 func (m *Matcher) Match(text string) bool {
 	normalized := normalizeText(text)
-	for _, pattern := range m.patterns {
-		if pattern.MatchString(normalized) {
-			return true
+
+	for i := range m.patterns {
+		if m.patterns[i] != nil {
+			if m.patterns[i].MatchString(normalized) {
+				return true
+			}
+		} else if m.keywordMatches[i] != nil {
+			if matchesAllKeywords(normalized, m.keywordMatches[i]) {
+				return true
+			}
 		}
 	}
 	return false
@@ -50,10 +75,27 @@ func (m *Matcher) Match(text string) bool {
 func (m *Matcher) FindMatches(text string) []string {
 	normalized := normalizeText(text)
 	var matches []string
-	for _, pattern := range m.patterns {
-		if pattern.MatchString(normalized) {
-			matches = append(matches, pattern.String())
+
+	for i := range m.patterns {
+		if m.patterns[i] != nil {
+			if m.patterns[i].MatchString(normalized) {
+				matches = append(matches, m.patterns[i].String())
+			}
+		} else if m.keywordMatches[i] != nil {
+			if matchesAllKeywords(normalized, m.keywordMatches[i]) {
+				matches = append(matches, strings.Join(m.keywordMatches[i], ", "))
+			}
 		}
 	}
 	return matches
+}
+
+func matchesAllKeywords(text string, keywords []string) bool {
+	for _, keyword := range keywords {
+		normalizedKeyword := normalizeText(keyword)
+		if !strings.Contains(text, normalizedKeyword) {
+			return false
+		}
+	}
+	return true
 }
