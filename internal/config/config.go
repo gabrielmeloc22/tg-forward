@@ -17,11 +17,10 @@ type TelegramConfig struct {
 }
 
 type UserConfig struct {
-	AppID       int
-	AppHash     string
-	Phone       string
-	SessionFile string
-	Session     string
+	AppID   int
+	AppHash string
+	Phone   string
+	Session string
 }
 
 type BotConfig struct {
@@ -45,7 +44,6 @@ func Load() (*Config, error) {
 	cfg.Telegram.User.AppID = appID
 	cfg.Telegram.User.AppHash = getEnv("TG_USER_APP_HASH", "")
 	cfg.Telegram.User.Phone = getEnv("TG_USER_PHONE", "")
-	cfg.Telegram.User.SessionFile = getEnv("TG_USER_SESSION_FILE", "session.json")
 	cfg.Telegram.User.Session = getEnv("TG_USER_SESSION", "")
 
 	cfg.Telegram.Bot.Token = getEnv("TG_BOT_TOKEN", "")

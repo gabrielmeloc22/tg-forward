@@ -3,8 +3,11 @@ package telegram
 import (
 	"context"
 	"encoding/base64"
+	"encoding/binary"
 	"fmt"
 	"log"
+	"net"
+	"strconv"
 
 	"github.com/gotd/td/session"
 	"github.com/gotd/td/telegram"
@@ -20,16 +23,15 @@ type Client struct {
 	handler       MessageHandler
 	api           *tg.Client
 	botID         int64
-	sessionPath   string
 	sessionString string
+	sessionStore  session.Storage
 }
 
-func NewClient(appID int, appHash, phone string, handler MessageHandler, botID int64, sessionPath, sessionString string) *Client {
+func NewClient(appID int, appHash, phone string, handler MessageHandler, botID int64, sessionString string) *Client {
 	return &Client{
 		phone:         phone,
 		handler:       handler,
 		botID:         botID,
-		sessionPath:   sessionPath,
 		sessionString: sessionString,
 	}
 }
@@ -37,18 +39,26 @@ func NewClient(appID int, appHash, phone string, handler MessageHandler, botID i
 func (c *Client) Run(ctx context.Context, appID int, appHash string) error {
 	dispatcher := tg.NewUpdateDispatcher()
 
-	var sessionStorage session.Storage
-	if c.sessionString != "" {
-		data, err := base64.StdEncoding.DecodeString(c.sessionString)
+	sessionStorage := &session.StorageMemory{}
+	usingEnvSession := c.sessionString != ""
+
+	if usingEnvSession {
+		sessionData, err := decodeTelethonSession(c.sessionString)
 		if err != nil {
 			return fmt.Errorf("failed to decode session string: %w", err)
 		}
-		sessionStorage = &sessionFromEnv{data: data}
-		log.Println("Using session from environment variable")
+
+		loader := session.Loader{Storage: sessionStorage}
+		if err := loader.Save(ctx, sessionData); err != nil {
+			return fmt.Errorf("failed to save decoded session: %w", err)
+		}
+
+		log.Println("Using Telethon session string from environment variable")
 	} else {
-		sessionStorage = &session.FileStorage{Path: c.sessionPath}
-		log.Printf("Using session file: %s", c.sessionPath)
+		log.Println("No session string provided - will require 2FA authentication")
 	}
+
+	c.sessionStore = sessionStorage
 
 	client := telegram.NewClient(appID, appHash, telegram.Options{
 		UpdateHandler:  dispatcher,
@@ -80,6 +90,12 @@ func (c *Client) Run(ctx context.Context, appID int, appHash string) error {
 	})
 
 	return client.Run(ctx, func(ctx context.Context) error {
+		authStatus, err := c.client.Auth().Status(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to check auth status: %w", err)
+		}
+		wasNotAuthorized := !authStatus.Authorized
+
 		if err := c.authenticate(ctx); err != nil {
 			return fmt.Errorf("authentication failed: %w", err)
 		}
@@ -88,9 +104,54 @@ func (c *Client) Run(ctx context.Context, appID int, appHash string) error {
 
 		log.Println("Successfully authenticated as user")
 
+		if wasNotAuthorized && !usingEnvSession {
+			self, err := c.api.UsersGetFullUser(ctx, &tg.InputUserSelf{})
+			if err == nil {
+				_ = self
+			}
+
+			if err := c.printSessionString(ctx); err != nil {
+				log.Printf("Warning: Failed to print session string: %v", err)
+			}
+		}
+
 		<-ctx.Done()
 		return ctx.Err()
 	})
+}
+
+func (c *Client) printSessionString(ctx context.Context) error {
+	loader := session.Loader{Storage: c.sessionStore}
+	sessionData, err := loader.Load(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to load session: %w", err)
+	}
+
+	if sessionData.Addr == "" {
+		cfg := c.client.Config()
+		for _, dc := range cfg.DCOptions {
+			if dc.ID == sessionData.DC {
+				sessionData.Addr = fmt.Sprintf("%s:%d", dc.IPAddress, dc.Port)
+				break
+			}
+		}
+	}
+
+	sessionString, err := encodeTelethonSession(sessionData)
+	if err != nil {
+		return fmt.Errorf("failed to encode session: %w", err)
+	}
+
+	separator := "================================================================================"
+	fmt.Println("\n" + separator)
+	fmt.Println("🔑 Session authenticated successfully!")
+	fmt.Println(separator)
+	fmt.Println("\nAdd this to your environment to avoid 2FA on every restart:")
+	fmt.Printf("\nTG_USER_SESSION=%s\n", sessionString)
+	fmt.Printf("\nSession size: %d characters\n", len(sessionString))
+	fmt.Println("\n" + separator + "\n")
+
+	return nil
 }
 
 func (c *Client) authenticate(ctx context.Context) error {
@@ -113,15 +174,44 @@ func (c *Client) authenticate(ctx context.Context) error {
 	return nil
 }
 
-type sessionFromEnv struct {
-	data []byte
+func decodeTelethonSession(sessionStr string) (*session.Data, error) {
+	return session.TelethonSession(sessionStr)
 }
 
-func (s *sessionFromEnv) LoadSession(ctx context.Context) ([]byte, error) {
-	return s.data, nil
-}
+func encodeTelethonSession(data *session.Data) (string, error) {
+	if data.Addr == "" {
+		return "", fmt.Errorf("session address is empty - session may not be fully initialized yet")
+	}
 
-func (s *sessionFromEnv) StoreSession(ctx context.Context, data []byte) error {
-	s.data = data
-	return nil
+	host, portStr, err := net.SplitHostPort(data.Addr)
+	if err != nil {
+		return "", fmt.Errorf("invalid address format: %w", err)
+	}
+
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return "", fmt.Errorf("invalid port: %w", err)
+	}
+
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return "", fmt.Errorf("invalid IP address: %s", host)
+	}
+
+	var buf []byte
+	buf = append(buf, byte(data.DC))
+
+	if ip4 := ip.To4(); ip4 != nil {
+		buf = append(buf, ip4...)
+	} else {
+		buf = append(buf, ip.To16()...)
+	}
+
+	portBytes := make([]byte, 2)
+	binary.BigEndian.PutUint16(portBytes, uint16(port))
+	buf = append(buf, portBytes...)
+
+	buf = append(buf, data.AuthKey...)
+
+	return "1" + base64.URLEncoding.EncodeToString(buf), nil
 }

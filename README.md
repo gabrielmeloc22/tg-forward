@@ -37,7 +37,6 @@ Example `.env`:
 TG_USER_APP_ID=12345678
 TG_USER_APP_HASH=your_api_hash_here
 TG_USER_PHONE=+1234567890
-TG_USER_SESSION_FILE=session.json
 TG_USER_SESSION=
 
 TG_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrsTUVwxyz
@@ -52,8 +51,7 @@ API_TOKEN=your-secret-api-token-here
 - `TG_USER_APP_ID`: Your Telegram app ID (from https://my.telegram.org)
 - `TG_USER_APP_HASH`: Your Telegram app hash
 - `TG_USER_PHONE`: Your phone number (with country code)
-- `TG_USER_SESSION_FILE`: Path to session file (default: `session.json`)
-- `TG_USER_SESSION`: Base64-encoded session string (optional, see Session Management below)
+- `TG_USER_SESSION`: Telethon StringSession (optional, see Authentication below)
 - `TG_BOT_TOKEN`: Your bot token (from @BotFather)
 - `TG_BOT_TARGET_CHAT_ID`: Target chat ID to forward messages to
 - `TG_BOT_TARGET_USERNAME`: Alternative to chat ID, use username (e.g., `@channel`)
@@ -77,19 +75,40 @@ docker run -d -p 8080:8080 \
 ```
 
 **First Run:**
-On first run, you'll be prompted to enter the 2FA code sent to your Telegram. After successful authentication, the session is saved to `session.json` (or the path specified in `TG_USER_SESSION_FILE`). Subsequent runs will use this session file without requiring 2FA.
+On first run, you'll be prompted to enter the 2FA code sent to your Telegram. After successful authentication, the session string will be automatically printed to the console.
 
-### Session Management
+Example output after first login:
+```
+================================================================================
+🔑 Session authenticated successfully!
+================================================================================
 
-**For Fly.io or other cloud deployments**, you can use the `TG_USER_SESSION` environment variable instead of a session file:
+For cloud deployments, add this to your environment:
 
-1. Run the app locally first to authenticate and generate `session.json`
-2. Convert the session file to base64:
-   ```bash
-   base64 -i session.json
-   ```
-3. Copy the output and set it as `TG_USER_SESSION` in your deployment environment
-4. The app will use the session from the environment variable instead of requiring terminal input
+TG_USER_SESSION=1AsCoAAEBu2FhYWFh...YWFhYWFhYWFhYWE=
+
+Session size: 353 characters
+
+================================================================================
+```
+
+### Authentication
+
+**Without Session String:**
+- You'll need to enter your 2FA code **every time** the service restarts
+- The session is kept in memory during runtime only
+
+**With Session String (Recommended):**
+1. Run the app locally first to authenticate with 2FA
+2. Copy the `TG_USER_SESSION` value from the console output
+3. Add it to your `.env` file or deployment environment variables
+4. Future restarts will use the session string (no 2FA required)
+
+**Session Format:**
+- Uses Telethon's StringSession format (~350 characters)
+- Contains: DC ID, IP, Port, and Auth Key
+- Safe to use in environment variables
+- Compatible across Telegram libraries
 
 **Note:** Forwarding rules are NOT stored in `.env`. Use the API to manage rules (stored in `rules.json`) or manually create a `rules.json` file with your initial rules:
 
