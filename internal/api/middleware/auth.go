@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/gabrielmelo/tg-forward/internal/api/serializer"
+	"github.com/gabrielmelo/tg-forward/internal/api/common"
 )
 
 func Auth(token string) func(http.Handler) http.Handler {
@@ -15,7 +15,7 @@ func Auth(token string) func(http.Handler) http.Handler {
 			if authHeader == "" {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusUnauthorized)
-				json.NewEncoder(w).Encode(serializer.ApiErrorResponse{
+				json.NewEncoder(w).Encode(common.ApiErrorResponse{
 					Code:    "UNAUTHORIZED",
 					Message: "Missing authorization header",
 				})
@@ -26,7 +26,7 @@ func Auth(token string) func(http.Handler) http.Handler {
 			if len(parts) != 2 || parts[0] != "Bearer" {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusUnauthorized)
-				json.NewEncoder(w).Encode(serializer.ApiErrorResponse{
+				json.NewEncoder(w).Encode(common.ApiErrorResponse{
 					Code:    "UNAUTHORIZED",
 					Message: "Invalid authorization header format",
 				})
@@ -36,7 +36,7 @@ func Auth(token string) func(http.Handler) http.Handler {
 			if parts[1] != token {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusUnauthorized)
-				json.NewEncoder(w).Encode(serializer.ApiErrorResponse{
+				json.NewEncoder(w).Encode(common.ApiErrorResponse{
 					Code:    "UNAUTHORIZED",
 					Message: "Invalid token",
 				})

@@ -1,13 +1,11 @@
-package handler
+package rules
 
 import (
 	"encoding/json"
 	"net/http"
-
-	"github.com/gabrielmelo/tg-forward/internal/api/serializer"
 )
 
-func Handler[T any](h func(w http.ResponseWriter, r *http.Request) (T, *serializer.Error)) http.HandlerFunc {
+func Wrap[T any](h func(w http.ResponseWriter, r *http.Request) (T, *Error)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
@@ -16,7 +14,7 @@ func Handler[T any](h func(w http.ResponseWriter, r *http.Request) (T, *serializ
 
 		if err != nil {
 			w.WriteHeader(err.StatusCode)
-			encoder.Encode(serializer.ApiErrorResponse{
+			encoder.Encode(ApiErrorResponse{
 				Code:    err.Code,
 				Message: err.Message,
 				Meta:    err.Meta,
@@ -29,14 +27,14 @@ func Handler[T any](h func(w http.ResponseWriter, r *http.Request) (T, *serializ
 	}
 }
 
-func HandlerWithBody[Req any, Res any](h func(w http.ResponseWriter, r *http.Request, body *Req) (Res, *serializer.Error)) http.HandlerFunc {
+func WrapWithBody[Req any, Res any](h func(w http.ResponseWriter, r *http.Request, body *Req) (Res, *Error)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
 		var body Req
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(serializer.ApiErrorResponse{
+			json.NewEncoder(w).Encode(ApiErrorResponse{
 				Code:    "INVALID_REQUEST_BODY",
 				Message: "Invalid request body",
 			})
@@ -48,7 +46,7 @@ func HandlerWithBody[Req any, Res any](h func(w http.ResponseWriter, r *http.Req
 
 		if apiErr != nil {
 			w.WriteHeader(apiErr.StatusCode)
-			encoder.Encode(serializer.ApiErrorResponse{
+			encoder.Encode(ApiErrorResponse{
 				Code:    apiErr.Code,
 				Message: apiErr.Message,
 				Meta:    apiErr.Meta,

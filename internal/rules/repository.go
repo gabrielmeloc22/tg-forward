@@ -1,4 +1,4 @@
-package repository
+package rules
 
 import (
 	"context"
@@ -17,12 +17,12 @@ type Rule struct {
 	Pattern string `json:"pattern" bson:"pattern"`
 }
 
-type RulesRepository struct {
+type Repository struct {
 	client     *mongo.Client
 	collection *mongo.Collection
 }
 
-func NewRulesRepository(uri, database, collection string) (*RulesRepository, error) {
+func NewRepository(uri, database, collection string) (*Repository, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -44,13 +44,13 @@ func NewRulesRepository(uri, database, collection string) (*RulesRepository, err
 		return nil, fmt.Errorf("failed to create index: %w", err)
 	}
 
-	return &RulesRepository{
+	return &Repository{
 		client:     client,
 		collection: coll,
 	}, nil
 }
 
-func (r *RulesRepository) GetRules() ([]Rule, error) {
+func (r *Repository) GetRules() ([]Rule, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -72,7 +72,7 @@ func (r *RulesRepository) GetRules() ([]Rule, error) {
 	return rules, nil
 }
 
-func (r *RulesRepository) GetRuleByID(id string) (*Rule, error) {
+func (r *Repository) GetRuleByID(id string) (*Rule, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -88,7 +88,7 @@ func (r *RulesRepository) GetRuleByID(id string) (*Rule, error) {
 	return &rule, nil
 }
 
-func (r *RulesRepository) SetRules(rules []Rule) error {
+func (r *Repository) SetRules(rules []Rule) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -113,7 +113,7 @@ func (r *RulesRepository) SetRules(rules []Rule) error {
 	return nil
 }
 
-func (r *RulesRepository) AddRule(name, pattern string) (*Rule, error) {
+func (r *Repository) AddRule(name, pattern string) (*Rule, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -131,7 +131,7 @@ func (r *RulesRepository) AddRule(name, pattern string) (*Rule, error) {
 	return &rule, nil
 }
 
-func (r *RulesRepository) RemoveRule(id string) error {
+func (r *Repository) RemoveRule(id string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -147,7 +147,7 @@ func (r *RulesRepository) RemoveRule(id string) error {
 	return nil
 }
 
-func (r *RulesRepository) GetPatterns() ([]string, error) {
+func (r *Repository) GetPatterns() ([]string, error) {
 	rules, err := r.GetRules()
 	if err != nil {
 		return nil, err
@@ -161,7 +161,7 @@ func (r *RulesRepository) GetPatterns() ([]string, error) {
 	return patterns, nil
 }
 
-func (r *RulesRepository) Close() error {
+func (r *Repository) Close() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 

@@ -1,10 +1,10 @@
-package serializer
+package rules
 
 type Error struct {
 	StatusCode int
 	Code       string
 	Message    string
-	Meta       map[string]interface{}
+	Meta       map[string]any
 }
 
 func (e *Error) Error() string {
@@ -12,9 +12,9 @@ func (e *Error) Error() string {
 }
 
 type ApiErrorResponse struct {
-	Code    string                 `json:"code"`
-	Message string                 `json:"message"`
-	Meta    map[string]interface{} `json:"meta,omitempty"`
+	Code    string         `json:"code"`
+	Message string         `json:"message"`
+	Meta    map[string]any `json:"meta,omitempty"`
 }
 
 func NewError(statusCode int, code, message string) *Error {
@@ -26,7 +26,7 @@ func NewError(statusCode int, code, message string) *Error {
 	}
 }
 
-func NewErrorWithMeta(statusCode int, code, message string, meta map[string]interface{}) *Error {
+func NewErrorWithMeta(statusCode int, code, message string, meta map[string]any) *Error {
 	return &Error{
 		StatusCode: statusCode,
 		Code:       code,

@@ -1,21 +1,23 @@
-package types
-
-import "github.com/gabrielmelo/tg-forward/internal/repository"
+package rules
 
 type DataResponse struct {
-	Data interface{} `json:"data"`
+	Data any `json:"data"`
+}
+
+type HealthResponse struct {
+	Status string `json:"status"`
 }
 
 type RulesResponse struct {
-	Rules []repository.Rule `json:"rules"`
+	Rules []Rule `json:"rules"`
 }
 
 type RuleResponse struct {
-	Rule repository.Rule `json:"rule"`
+	Rule Rule `json:"rule"`
 }
 
 type UpdateRulesRequest struct {
-	Rules []repository.Rule `json:"rules"`
+	Rules []Rule `json:"rules"`
 }
 
 type AddRuleRequest struct {
@@ -29,8 +31,4 @@ type RemoveRuleRequest struct {
 
 type ErrorResponse struct {
 	Error string `json:"error"`
-}
-
-type HealthResponse struct {
-	Status string `json:"status"`
 }

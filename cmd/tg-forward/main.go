@@ -13,8 +13,7 @@ import (
 	"github.com/gabrielmelo/tg-forward/internal/api"
 	"github.com/gabrielmelo/tg-forward/internal/config"
 	"github.com/gabrielmelo/tg-forward/internal/matcher"
-	"github.com/gabrielmelo/tg-forward/internal/repository"
-	"github.com/gabrielmelo/tg-forward/internal/service"
+	"github.com/gabrielmelo/tg-forward/internal/rules"
 	"github.com/gabrielmelo/tg-forward/internal/telegram"
 	"github.com/gotd/td/tg"
 	"github.com/joho/godotenv"
@@ -39,7 +38,7 @@ func main() {
 		apiPort = "8080"
 	}
 
-	rulesRepo, err := repository.NewRulesRepository(
+	rulesRepo, err := rules.NewRepository(
 		cfg.MongoDB.URI,
 		cfg.MongoDB.Database,
 		"rules",
@@ -59,7 +58,7 @@ func main() {
 		log.Fatalf("Failed to initialize matcher: %v", err)
 	}
 
-	rulesService := service.NewRulesService(rulesRepo, m)
+	rulesService := rules.NewService(rulesRepo, m)
 
 	bot, err := telegram.NewBot(
 		cfg.Telegram.Bot.Token,

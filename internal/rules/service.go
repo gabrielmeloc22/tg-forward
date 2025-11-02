@@ -1,31 +1,30 @@
-package service
+package rules
 
 import (
 	"fmt"
 	"regexp"
 
 	"github.com/gabrielmelo/tg-forward/internal/matcher"
-	"github.com/gabrielmelo/tg-forward/internal/repository"
 )
 
-type RulesService struct {
-	repo    *repository.RulesRepository
+type Service struct {
+	repo    *Repository
 	matcher *matcher.Matcher
 }
 
-func NewRulesService(repo *repository.RulesRepository, m *matcher.Matcher) *RulesService {
-	return &RulesService{
+func NewService(repo *Repository, m *matcher.Matcher) *Service {
+	return &Service{
 		repo:    repo,
 		matcher: m,
 	}
 }
 
-func (s *RulesService) GetRules() []repository.Rule {
+func (s *Service) GetRules() []Rule {
 	rules, _ := s.repo.GetRules()
 	return rules
 }
 
-func (s *RulesService) UpdateRules(rules []repository.Rule) ([]repository.Rule, error) {
+func (s *Service) UpdateRules(rules []Rule) ([]Rule, error) {
 	if len(rules) == 0 {
 		return nil, fmt.Errorf("at least one rule is required")
 	}
@@ -51,7 +50,7 @@ func (s *RulesService) UpdateRules(rules []repository.Rule) ([]repository.Rule, 
 	return rules, nil
 }
 
-func (s *RulesService) AddRule(name, pattern string) (*repository.Rule, error) {
+func (s *Service) AddRule(name, pattern string) (*Rule, error) {
 	if err := s.validatePattern(pattern); err != nil {
 		return nil, err
 	}
@@ -75,7 +74,7 @@ func (s *RulesService) AddRule(name, pattern string) (*repository.Rule, error) {
 	return rule, nil
 }
 
-func (s *RulesService) RemoveRule(id string) error {
+func (s *Service) RemoveRule(id string) error {
 	if err := s.repo.RemoveRule(id); err != nil {
 		return err
 	}
@@ -90,11 +89,11 @@ func (s *RulesService) RemoveRule(id string) error {
 	return nil
 }
 
-func (s *RulesService) GetMatcher() *matcher.Matcher {
+func (s *Service) GetMatcher() *matcher.Matcher {
 	return s.matcher
 }
 
-func (s *RulesService) validatePattern(pattern string) error {
+func (s *Service) validatePattern(pattern string) error {
 	if _, err := regexp.Compile(pattern); err != nil {
 		return fmt.Errorf("invalid regex pattern '%s': %w", pattern, err)
 	}

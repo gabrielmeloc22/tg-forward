@@ -7,19 +7,18 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gabrielmelo/tg-forward/internal/api/router"
 	"github.com/gabrielmelo/tg-forward/internal/matcher"
-	"github.com/gabrielmelo/tg-forward/internal/service"
+	"github.com/gabrielmelo/tg-forward/internal/rules"
 )
 
 type Server struct {
-	service  *service.RulesService
+	service  *rules.Service
 	port     string
 	apiToken string
 	server   *http.Server
 }
 
-func NewServer(svc *service.RulesService, port, apiToken string) *Server {
+func NewServer(svc *rules.Service, port, apiToken string) *Server {
 	return &Server{
 		service:  svc,
 		port:     port,
@@ -28,7 +27,7 @@ func NewServer(svc *service.RulesService, port, apiToken string) *Server {
 }
 
 func (s *Server) Start() error {
-	r := router.New(s.service, s.apiToken)
+	r := rules.NewRouter(s.service, s.apiToken)
 
 	addr := fmt.Sprintf(":%s", s.port)
 	s.server = &http.Server{
