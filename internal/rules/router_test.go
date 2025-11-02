@@ -1,58 +1,22 @@
 package rules_test
 
 import (
-	"context"
 	"net/http"
 	"testing"
 
-	"github.com/gabrielmelo/tg-forward/internal/matcher"
 	"github.com/gabrielmelo/tg-forward/internal/rules"
 	"github.com/gabrielmelo/tg-forward/internal/testutils"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go/modules/mongodb"
 )
 
 const testAPIToken = "test-api-token-12345"
 
-func setupTestDB(t *testing.T) (*rules.Repository, func()) {
-	ctx := context.Background()
-
-	mongodbContainer, err := mongodb.Run(ctx, "mongo:6")
-	require.NoError(t, err)
-
-	uri, err := mongodbContainer.ConnectionString(ctx)
-	require.NoError(t, err)
-
-	repo, err := rules.NewRepository(uri, "testdb", "rules")
-	require.NoError(t, err)
-
-	cleanup := func() {
-		repo.Close()
-		mongodbContainer.Terminate(ctx)
-	}
-
-	return repo, cleanup
-}
-
 func setupRouter(t *testing.T, initialPatterns []string) (*chi.Mux, *rules.Repository, func()) {
-	repo, cleanup := setupTestDB(t)
+	client, database, cleanup := testutils.SetupTestDB(t)
+	fixture := testutils.NewFixture(t, client, database, testAPIToken, initialPatterns)
 
-	for _, pattern := range initialPatterns {
-		_, err := repo.AddRule("test-rule", pattern)
-		require.NoError(t, err)
-	}
-
-	patterns, err := repo.GetPatterns()
-	require.NoError(t, err)
-
-	m, err := matcher.New(patterns)
-	require.NoError(t, err)
-
-	svc := rules.NewService(repo, m)
-	r := rules.NewRouter(svc, testAPIToken)
-
-	return r, repo, cleanup
+	return fixture.Router, fixture.RulesRepo, cleanup
 }
 
 func TestHealthEndpoint(t *testing.T) {

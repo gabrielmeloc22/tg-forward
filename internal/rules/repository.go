@@ -8,7 +8,6 @@ import (
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type Rule struct {
@@ -18,22 +17,12 @@ type Rule struct {
 }
 
 type Repository struct {
-	client     *mongo.Client
 	collection *mongo.Collection
 }
 
-func NewRepository(uri, database, collection string) (*Repository, error) {
+func NewRepository(client *mongo.Client, database, collection string) (*Repository, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to MongoDB: %w", err)
-	}
-
-	if err := client.Ping(ctx, nil); err != nil {
-		return nil, fmt.Errorf("failed to ping MongoDB: %w", err)
-	}
 
 	coll := client.Database(database).Collection(collection)
 
@@ -45,7 +34,6 @@ func NewRepository(uri, database, collection string) (*Repository, error) {
 	}
 
 	return &Repository{
-		client:     client,
 		collection: coll,
 	}, nil
 }
@@ -162,10 +150,7 @@ func (r *Repository) GetPatterns() ([]string, error) {
 }
 
 func (r *Repository) Close() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	return r.client.Disconnect(ctx)
+	return nil
 }
 
 func generateID() string {

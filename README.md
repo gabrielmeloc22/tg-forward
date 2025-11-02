@@ -6,7 +6,7 @@ A Golang service that listens to your Telegram messages and forwards messages ma
 
 1. Connects to your Telegram account (user account)
 2. Listens for incoming messages
-3. Matches messages against regex patterns (managed via API or `rules.json`)
+3. Matches messages against regex patterns (managed via API)
 4. Forwards matching messages using a bot to a target chat
 5. Provides an HTTP API to manage forwarding rules dynamically
 
@@ -57,6 +57,8 @@ API_TOKEN=your-secret-api-token-here
 - `TG_BOT_TARGET_USERNAME`: Alternative to chat ID, use username (e.g., `@channel`)
 - `API_PORT`: HTTP API port (default: `8080`)
 - `API_TOKEN`: Secret token for API authentication
+- `MONGODB_URI`: MongoDB connection string (default: `mongodb://localhost:27017`)
+- `MONGODB_DATABASE`: MongoDB database name (default: `tg-forward`)
 
 ### 3. Run
 
@@ -70,7 +72,6 @@ go run cmd/tg-forward/main.go
 docker build -t tg-forward .
 docker run -d -p 8080:8080 \
   --env-file .env \
-  -v $(pwd)/configs:/app/configs \
   tg-forward
 ```
 
@@ -110,28 +111,23 @@ Session size: 353 characters
 - Safe to use in environment variables
 - Compatible across Telegram libraries
 
-**Note:** Forwarding rules are NOT stored in `.env`. Use the API to manage rules (stored in `rules.json`) or manually create a `rules.json` file with your initial rules:
+## Storage
 
-```json
-{
-  "rules": [
-    {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
-      "name": "Urgent Messages",
-      "pattern": "urgent.*"
-    },
-    {
-      "id": "650e8400-e29b-41d4-a716-446655440001",
-      "name": "Important",
-      "pattern": "important"
-    },
-    {
-      "id": "750e8400-e29b-41d4-a716-446655440002",
-      "name": "6-digit codes",
-      "pattern": "[0-9]{6}"
-    }
-  ]
-}
+Forwarding rules are stored in MongoDB and managed exclusively via the HTTP API. The service connects to MongoDB using the `MONGODB_URI` environment variable.
+
+**MongoDB Setup:**
+```bash
+# Local development (using Docker)
+docker run -d -p 27017:27017 --name mongodb mongo:latest
+
+# Or use MongoDB Atlas (free tier available)
+# https://www.mongodb.com/cloud/atlas
+```
+
+Add to your `.env`:
+```env
+MONGODB_URI=mongodb://localhost:27017
+MONGODB_DATABASE=tg-forward
 ```
 
 ## API Usage

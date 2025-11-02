@@ -17,6 +17,8 @@ import (
 	"github.com/gabrielmelo/tg-forward/internal/telegram"
 	"github.com/gotd/td/tg"
 	"github.com/joho/godotenv"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 func main() {
@@ -38,8 +40,26 @@ func main() {
 		apiPort = "8080"
 	}
 
+	ctx := context.Background()
+
+	db, err := mongo.Connect(ctx, options.Client().ApplyURI(cfg.MongoDB.URI))
+	if err != nil {
+		log.Fatalf("Failed to connect to MongoDB: %v", err)
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := db.Disconnect(ctx); err != nil {
+			log.Printf("Error disconnecting from MongoDB: %v", err)
+		}
+	}()
+
+	if err := db.Ping(ctx, nil); err != nil {
+		log.Fatalf("Failed to ping MongoDB: %v", err)
+	}
+
 	rulesRepo, err := rules.NewRepository(
-		cfg.MongoDB.URI,
+		db,
 		cfg.MongoDB.Database,
 		"rules",
 	)
