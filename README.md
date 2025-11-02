@@ -9,6 +9,7 @@ A Golang service that listens to your Telegram messages and forwards messages ma
 3. Matches messages against regex patterns or keywords (managed via API)
 4. Forwards matching messages using a bot to a target chat
 5. Provides an HTTP API to manage forwarding rules dynamically
+6. Includes a web-based admin panel for easy rule management
 
 ## Setup
 
@@ -130,9 +131,28 @@ MONGODB_URI=mongodb://localhost:27017
 MONGODB_DATABASE=tg-forward
 ```
 
-## API Usage
+## Managing Rules
 
-All endpoints except `/health` require authentication:
+### Web Admin Panel (Recommended)
+
+Access the admin panel at `http://localhost:8080/admin`
+
+**Features:**
+- 🎨 Modern, responsive UI built with HTMX and Tailwind CSS
+- 🔒 Secure token-based authentication (uses your API_TOKEN)
+- ➕ Add, edit, and delete rules with a visual interface
+- 🏷️ Support for pattern-based, keyword-based, and mixed rules
+- ⚡ Real-time updates without page reloads
+- 📱 Mobile-friendly design
+
+**Usage:**
+1. Navigate to `http://localhost:8080/admin` in your browser
+2. Enter your `API_TOKEN` from your `.env` file
+3. Manage rules with the visual interface
+
+### API Usage (Alternative)
+
+All endpoints except `/health` and `/admin` require authentication:
 ```bash
 Authorization: Bearer your-secret-api-token
 ```

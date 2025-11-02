@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TG Forward - Admin Panel</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        [x-cloak] { display: none !important; }
+        .rule-card { transition: all 0.2s ease; }
+        .rule-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .keyword-tag { display: inline-block; padding: 0.25rem 0.5rem; margin: 0.125rem; background: #e5e7eb; border-radius: 0.25rem; font-size: 0.875rem; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <div id="auth-section" class="max-w-md mx-auto">
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h1 class="text-2xl font-bold mb-6 text-gray-800">TG Forward Admin</h1>
+                <form id="auth-form" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">API Token</label>
+                        <input type="password" id="token-input" placeholder="Enter your API token" 
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <button type="submit" class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition">
+                        Login
+                    </button>
+                    <div id="auth-error" class="text-red-600 text-sm hidden"></div>
+                </form>
+            </div>
+        </div>
+
+        <div id="main-section" class="hidden">
+            <div class="flex justify-between items-center mb-8">
+                <h1 class="text-3xl font-bold text-gray-800">Forwarding Rules</h1>
+                <div class="space-x-2">
+                    <button onclick="showAddForm()" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition">
+                        + Add Rule
+                    </button>
+                    <button onclick="logout()" class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition">
+                        Logout
+                    </button>
+                </div>
+            </div>
+
+            <div id="add-form" class="hidden mb-6 bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-semibold mb-4 text-gray-800">Add New Rule</h2>
+                <form id="rule-form" class="space-y-4">
+                    <input type="hidden" id="edit-rule-id">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Rule Name *</label>
+                        <input type="text" id="rule-name" required placeholder="e.g., Payment Alerts"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Regex Pattern</label>
+                        <input type="text" id="rule-pattern" placeholder="e.g., urgent.*|emergency.*"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <p class="text-xs text-gray-500 mt-1">Optional. Matches using regex.</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Keywords (comma-separated)</label>
+                        <input type="text" id="rule-keywords" placeholder="e.g., payment, received, confirmed"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <p class="text-xs text-gray-500 mt-1">Optional. ALL keywords must be present in text.</p>
+                    </div>
+                    <div class="bg-blue-50 border border-blue-200 rounded-md p-3 text-sm text-blue-800">
+                        <strong>Note:</strong> You must provide either a pattern, keywords, or both.
+                    </div>
+                    <div class="flex space-x-2">
+                        <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition">
+                            Save Rule
+                        </button>
+                        <button type="button" onclick="hideAddForm()" class="bg-gray-400 text-white px-4 py-2 rounded-md hover:bg-gray-500 transition">
+                            Cancel
+                        </button>
+                    </div>
+                    <div id="form-error" class="text-red-600 text-sm hidden"></div>
+                </form>
+            </div>
+
+            <div id="rules-container" class="grid gap-4">
+                <div class="text-center py-8 text-gray-500">Loading rules...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        let currentToken = sessionStorage.getItem('apiToken');
+
+        if (currentToken) {
+            showMainSection();
+            loadRules();
+        }
+
+        document.getElementById('auth-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const token = document.getElementById('token-input').value;
+            
+            try {
+                const response = await fetch(`${API_BASE}/rules`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    sessionStorage.setItem('apiToken', token);
+                    currentToken = token;
+                    showMainSection();
+                    loadRules();
+                } else {
+                    showAuthError('Invalid token');
+                }
+            } catch (error) {
+                showAuthError('Connection error');
+            }
+        });
+
+        function showAuthError(message) {
+            const errorDiv = document.getElementById('auth-error');
+            errorDiv.textContent = message;
+            errorDiv.classList.remove('hidden');
+        }
+
+        function showMainSection() {
+            document.getElementById('auth-section').classList.add('hidden');
+            document.getElementById('main-section').classList.remove('hidden');
+        }
+
+        function logout() {
+            sessionStorage.removeItem('apiToken');
+            currentToken = null;
+            document.getElementById('main-section').classList.add('hidden');
+            document.getElementById('auth-section').classList.remove('hidden');
+            document.getElementById('token-input').value = '';
+        }
+
+        async function loadRules() {
+            try {
+                const response = await fetch(`${API_BASE}/rules`, {
+                    headers: { 'Authorization': `Bearer ${currentToken}` }
+                });
+                
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        logout();
+                        return;
+                    }
+                    throw new Error('Failed to load rules');
+                }
+                
+                const data = await response.json();
+                const rules = data.data.rules || [];
+                renderRules(rules);
+            } catch (error) {
+                document.getElementById('rules-container').innerHTML = `
+                    <div class="text-center py-8 text-red-600">Error loading rules: ${error.message}</div>
+                `;
+            }
+        }
+
+        function renderRules(rules) {
+            const container = document.getElementById('rules-container');
+            
+            if (rules.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-12 bg-white rounded-lg shadow-md">
+                        <p class="text-gray-500 text-lg mb-2">No rules configured</p>
+                        <p class="text-gray-400 text-sm">Click "Add Rule" to create your first forwarding rule</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = rules.map(rule => `
+                <div class="rule-card bg-white rounded-lg shadow-md p-6">
+                    <div class="flex justify-between items-start mb-3">
+                        <h3 class="text-xl font-semibold text-gray-800">${escapeHtml(rule.name)}</h3>
+                        <div class="space-x-2">
+                            <button onclick='editRule(${JSON.stringify(rule)})' 
+                                    class="text-blue-600 hover:text-blue-800 px-3 py-1 rounded border border-blue-600 hover:bg-blue-50 transition text-sm">
+                                Edit
+                            </button>
+                            <button onclick="deleteRule('${rule.id}', '${escapeHtml(rule.name)}')" 
+                                    class="text-red-600 hover:text-red-800 px-3 py-1 rounded border border-red-600 hover:bg-red-50 transition text-sm">
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                    <div class="space-y-2">
+                        ${rule.pattern ? `
+                            <div>
+                                <span class="text-xs font-medium text-gray-500 uppercase">Pattern:</span>
+                                <code class="block mt-1 bg-gray-100 px-3 py-2 rounded text-sm font-mono text-gray-800">${escapeHtml(rule.pattern)}</code>
+                            </div>
+                        ` : ''}
+                        ${rule.keywords && rule.keywords.length > 0 ? `
+                            <div>
+                                <span class="text-xs font-medium text-gray-500 uppercase">Keywords (all required):</span>
+                                <div class="mt-1">
+                                    ${rule.keywords.map(kw => `<span class="keyword-tag">${escapeHtml(kw)}</span>`).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+                    <div class="mt-3 text-xs text-gray-400">
+                        ID: ${rule.id}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function showAddForm() {
+            document.getElementById('add-form').classList.remove('hidden');
+            document.getElementById('rule-form').reset();
+            document.getElementById('edit-rule-id').value = '';
+            document.getElementById('form-error').classList.add('hidden');
+            document.querySelector('#add-form h2').textContent = 'Add New Rule';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function hideAddForm() {
+            document.getElementById('add-form').classList.add('hidden');
+            document.getElementById('rule-form').reset();
+            document.getElementById('edit-rule-id').value = '';
+        }
+
+        function editRule(rule) {
+            document.getElementById('edit-rule-id').value = rule.id;
+            document.getElementById('rule-name').value = rule.name;
+            document.getElementById('rule-pattern').value = rule.pattern || '';
+            document.getElementById('rule-keywords').value = rule.keywords ? rule.keywords.join(', ') : '';
+            document.getElementById('add-form').classList.remove('hidden');
+            document.querySelector('#add-form h2').textContent = 'Edit Rule';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        document.getElementById('rule-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const name = document.getElementById('rule-name').value.trim();
+            const pattern = document.getElementById('rule-pattern').value.trim();
+            const keywordsInput = document.getElementById('rule-keywords').value.trim();
+            const keywords = keywordsInput ? keywordsInput.split(',').map(k => k.trim()).filter(k => k) : [];
+            const editId = document.getElementById('edit-rule-id').value;
+
+            if (!pattern && keywords.length === 0) {
+                showFormError('You must provide either a pattern, keywords, or both');
+                return;
+            }
+
+            const payload = { name };
+            if (pattern) payload.pattern = pattern;
+            if (keywords.length > 0) payload.keywords = keywords;
+
+            try {
+                let response;
+                if (editId) {
+                    payload.id = editId;
+                    const allRules = await getAllRules();
+                    const updatedRules = allRules.map(r => r.id === editId ? payload : r);
+                    
+                    response = await fetch(`${API_BASE}/rules`, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `Bearer ${currentToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ rules: updatedRules })
+                    });
+                } else {
+                    response = await fetch(`${API_BASE}/rules/add`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${currentToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(payload)
+                    });
+                }
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to save rule');
+                }
+
+                hideAddForm();
+                loadRules();
+            } catch (error) {
+                showFormError(error.message);
+            }
+        });
+
+        async function getAllRules() {
+            const response = await fetch(`${API_BASE}/rules`, {
+                headers: { 'Authorization': `Bearer ${currentToken}` }
+            });
+            const data = await response.json();
+            return data.data.rules || [];
+        }
+
+        function showFormError(message) {
+            const errorDiv = document.getElementById('form-error');
+            errorDiv.textContent = message;
+            errorDiv.classList.remove('hidden');
+        }
+
+        async function deleteRule(id, name) {
+            if (!confirm(`Are you sure you want to delete the rule "${name}"?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/rules/remove`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${currentToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ id })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to delete rule');
+                }
+
+                loadRules();
+            } catch (error) {
+                alert(`Error deleting rule: ${error.message}`);
+            }
+        }
+    </script>
+</body>
+</html>

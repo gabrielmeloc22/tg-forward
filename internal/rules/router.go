@@ -2,6 +2,8 @@ package rules
 
 import (
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"github.com/gabrielmelo/tg-forward/internal/api/middleware"
 	"github.com/go-chi/chi/v5"
@@ -10,6 +12,12 @@ import (
 
 func healthHandler(w http.ResponseWriter, r *http.Request) (*DataResponse, *Error) {
 	return &DataResponse{Data: HealthResponse{Status: "ok"}}, nil
+}
+
+func adminHandler(w http.ResponseWriter, r *http.Request) {
+	wd, _ := os.Getwd()
+	htmlPath := filepath.Join(wd, "web", "admin.html")
+	http.ServeFile(w, r, htmlPath)
 }
 
 func NewRouter(svc *Service, apiToken string) *chi.Mux {
@@ -24,6 +32,7 @@ func NewRouter(svc *Service, apiToken string) *chi.Mux {
 	rulesHandler := NewHandler(svc)
 
 	r.Get("/health", Wrap(healthHandler))
+	r.Get("/admin", adminHandler)
 
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Auth(apiToken))
