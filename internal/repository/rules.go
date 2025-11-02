@@ -33,9 +33,6 @@ func NewRulesRepository(filePath string) (*RulesRepository, error) {
 	if err := repo.load(); err != nil {
 		if os.IsNotExist(err) {
 			repo.rules = &Rules{Rules: []Rule{}}
-			if err := repo.save(); err != nil {
-				return nil, fmt.Errorf("failed to create initial rules file: %w", err)
-			}
 		} else {
 			return nil, fmt.Errorf("failed to load rules: %w", err)
 		}

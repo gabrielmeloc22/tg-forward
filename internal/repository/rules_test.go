@@ -21,7 +21,10 @@ func TestNewRulesRepository(t *testing.T) {
 		}
 
 		if _, err := os.Stat(rulesPath); os.IsNotExist(err) {
-			t.Error("Rules file was not created")
+			rules := repo.GetRules()
+			if len(rules) != 0 {
+				t.Errorf("Expected empty rules, got %d", len(rules))
+			}
 		}
 	})
 
