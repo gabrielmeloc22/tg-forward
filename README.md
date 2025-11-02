@@ -1,12 +1,12 @@
 # Telegram Message Forwarder
 
-A Golang service that listens to your Telegram messages and forwards messages matching regex patterns to another chat via a bot.
+A Golang service that listens to your Telegram messages and forwards messages matching regex patterns or keywords to another chat via a bot.
 
 ## What It Does
 
 1. Connects to your Telegram account (user account)
 2. Listens for incoming messages
-3. Matches messages against regex patterns (managed via API)
+3. Matches messages against regex patterns or keywords (managed via API)
 4. Forwards matching messages using a bot to a target chat
 5. Provides an HTTP API to manage forwarding rules dynamically
 
@@ -157,8 +157,8 @@ Response:
       },
       {
         "id": "650e8400-e29b-41d4-a716-446655440001",
-        "name": "Important",
-        "pattern": "important"
+        "name": "Important Keywords",
+        "keywords": ["important", "critical"]
       }
     ]
   }
@@ -166,11 +166,29 @@ Response:
 ```
 
 ### Add Rule
+
+**Pattern-based rule:**
 ```bash
 curl -X POST http://localhost:8080/rules/add \
   -H "Authorization: Bearer your-token" \
   -H "Content-Type: application/json" \
   -d '{"name": "Emergency Messages", "pattern": "emergency.*"}'
+```
+
+**Keyword-based rule (all keywords must be present):**
+```bash
+curl -X POST http://localhost:8080/rules/add \
+  -H "Authorization: Bearer your-token" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Payment Alert", "keywords": ["payment", "received"]}'
+```
+
+**Mixed rule (pattern OR keywords):**
+```bash
+curl -X POST http://localhost:8080/rules/add \
+  -H "Authorization: Bearer your-token" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Alerts", "pattern": "alert.*", "keywords": ["urgent", "critical"]}'
 ```
 
 Response:
@@ -193,8 +211,8 @@ curl -X PUT http://localhost:8080/rules \
   -H "Content-Type: application/json" \
   -d '{
     "rules": [
-      {"id": "550e8400-e29b-41d4-a716-446655440000", "name": "New Pattern", "pattern": "new.*"},
-      {"id": "650e8400-e29b-41d4-a716-446655440001", "name": "Test", "pattern": "test"}
+      {"id": "550e8400-e29b-41d4-a716-446655440000", "name": "Pattern Rule", "pattern": "urgent.*"},
+      {"id": "650e8400-e29b-41d4-a716-446655440001", "name": "Keyword Rule", "keywords": ["payment", "received"]}
     ]
   }'
 ```
@@ -204,8 +222,8 @@ Response:
 {
   "data": {
     "rules": [
-      {"id": "550e8400-e29b-41d4-a716-446655440000", "name": "New Pattern", "pattern": "new.*"},
-      {"id": "650e8400-e29b-41d4-a716-446655440001", "name": "Test", "pattern": "test"}
+      {"id": "550e8400-e29b-41d4-a716-446655440000", "name": "Pattern Rule", "pattern": "urgent.*"},
+      {"id": "650e8400-e29b-41d4-a716-446655440001", "name": "Keyword Rule", "keywords": ["payment", "received"]}
     ]
   }
 }
@@ -223,7 +241,7 @@ Response:
 ```json
 {
   "data": {
-    "message": "rule removed"
+    "message": "rule deleted successfully"
   }
 }
 ```
@@ -237,12 +255,24 @@ Response:
 ```json
 {
   "data": {
-    "status": "healthy"
+    "status": "ok"
   }
 }
 ```
 
-## Common Regex Patterns
+## Rule Types
+
+### Pattern-based Rules
+Matches using regex patterns:
+- `{"name": "Urgent", "pattern": "urgent.*"}` - matches text with regex
+
+### Keyword-based Rules
+Matches when ALL keywords are present (case-insensitive):
+- `{"name": "Payment Alert", "keywords": ["payment", "received"]}` - both keywords must exist
+
+### Mixed Rules
+Matches if EITHER pattern OR keywords match:
+- `{"name": "Alerts", "pattern": "alert.*", "keywords": ["urgent", "critical"]}` - pattern match OR all keywords present
 
 ```regex
 [0-9]{6}              # 6-digit codes

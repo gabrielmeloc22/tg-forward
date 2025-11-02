@@ -4,6 +4,10 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+
+	"golang.org/x/text/runes"
+	"golang.org/x/text/transform"
+	"golang.org/x/text/unicode/norm"
 )
 
 type MatchRule struct {
@@ -41,6 +45,9 @@ func New(rules []MatchRule) (*Matcher, error) {
 }
 
 func normalizeText(text string) string {
+	t := transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
+	text, _, _ = transform.String(t, text)
+
 	text = strings.ToLower(text)
 
 	var result strings.Builder
