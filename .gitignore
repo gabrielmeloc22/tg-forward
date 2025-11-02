@@ -17,8 +17,8 @@ configs/rules.json
 
 *.log
 
-tg-forward
-tg-forward-*
+/tg-forward
+/tg-forward-*
 
 .vscode/
 .idea/
