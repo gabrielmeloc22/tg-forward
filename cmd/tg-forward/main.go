@@ -21,7 +21,6 @@ import (
 )
 
 func main() {
-	rulesPath := flag.String("rules", "configs/rules.json", "path to rules file")
 	flag.Parse()
 
 	if err := godotenv.Load(); err != nil {
@@ -40,14 +39,19 @@ func main() {
 		apiPort = "8080"
 	}
 
-	rulesRepo, err := repository.NewRulesRepository(*rulesPath)
+	rulesRepo, err := repository.NewRulesRepository(
+		cfg.MongoDB.URI,
+		cfg.MongoDB.Database,
+		"rules",
+	)
 	if err != nil {
 		log.Fatalf("Failed to initialize rules repository: %v", err)
 	}
+	defer rulesRepo.Close()
 
-	patterns := rulesRepo.GetPatterns()
-	if len(patterns) == 0 {
-		log.Printf("No rules configured. Messages will not be forwarded until rules are added via API.")
+	patterns, err := rulesRepo.GetPatterns()
+	if err != nil {
+		log.Fatalf("Failed to get patterns: %v", err)
 	}
 
 	m, err := matcher.New(patterns)

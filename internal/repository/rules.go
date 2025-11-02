@@ -1,138 +1,173 @@
 package repository
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
-	"os"
-	"path/filepath"
-	"sync"
+	"time"
 
 	"github.com/google/uuid"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type Rule struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Pattern string `json:"pattern"`
-}
-
-type Rules struct {
-	Rules []Rule `json:"rules"`
+	ID      string `json:"id" bson:"_id"`
+	Name    string `json:"name" bson:"name"`
+	Pattern string `json:"pattern" bson:"pattern"`
 }
 
 type RulesRepository struct {
-	filePath string
-	mu       sync.RWMutex
-	rules    *Rules
+	client     *mongo.Client
+	collection *mongo.Collection
 }
 
-func NewRulesRepository(filePath string) (*RulesRepository, error) {
-	repo := &RulesRepository{
-		filePath: filePath,
+func NewRulesRepository(uri, database, collection string) (*RulesRepository, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to MongoDB: %w", err)
 	}
 
-	if err := repo.load(); err != nil {
-		if os.IsNotExist(err) {
-			repo.rules = &Rules{Rules: []Rule{}}
-		} else {
-			return nil, fmt.Errorf("failed to load rules: %w", err)
+	if err := client.Ping(ctx, nil); err != nil {
+		return nil, fmt.Errorf("failed to ping MongoDB: %w", err)
+	}
+
+	coll := client.Database(database).Collection(collection)
+
+	indexModel := mongo.IndexModel{
+		Keys: bson.D{{Key: "name", Value: 1}},
+	}
+	if _, err := coll.Indexes().CreateOne(ctx, indexModel); err != nil {
+		return nil, fmt.Errorf("failed to create index: %w", err)
+	}
+
+	return &RulesRepository{
+		client:     client,
+		collection: coll,
+	}, nil
+}
+
+func (r *RulesRepository) GetRules() ([]Rule, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cursor, err := r.collection.Find(ctx, bson.M{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to find rules: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	var rules []Rule
+	if err := cursor.All(ctx, &rules); err != nil {
+		return nil, fmt.Errorf("failed to decode rules: %w", err)
+	}
+
+	if rules == nil {
+		rules = []Rule{}
+	}
+
+	return rules, nil
+}
+
+func (r *RulesRepository) GetRuleByID(id string) (*Rule, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var rule Rule
+	err := r.collection.FindOne(ctx, bson.M{"_id": id}).Decode(&rule)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, fmt.Errorf("rule not found: %s", id)
 		}
+		return nil, fmt.Errorf("failed to find rule: %w", err)
 	}
 
-	return repo, nil
-}
-
-func (r *RulesRepository) load() error {
-	data, err := os.ReadFile(r.filePath)
-	if err != nil {
-		return err
-	}
-
-	var rules Rules
-	if err := json.Unmarshal(data, &rules); err != nil {
-		return fmt.Errorf("failed to unmarshal rules: %w", err)
-	}
-
-	r.rules = &rules
-	return nil
-}
-
-func (r *RulesRepository) save() error {
-	data, err := json.MarshalIndent(r.rules, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal rules: %w", err)
-	}
-
-	dir := filepath.Dir(r.filePath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("failed to create directory: %w", err)
-	}
-
-	if err := os.WriteFile(r.filePath, data, 0644); err != nil {
-		return fmt.Errorf("failed to write rules file: %w", err)
-	}
-
-	return nil
-}
-
-func (r *RulesRepository) GetRules() []Rule {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	rules := make([]Rule, len(r.rules.Rules))
-	copy(rules, r.rules.Rules)
-	return rules
+	return &rule, nil
 }
 
 func (r *RulesRepository) SetRules(rules []Rule) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
-	r.rules.Rules = make([]Rule, len(rules))
-	copy(r.rules.Rules, rules)
+	if err := r.collection.Drop(ctx); err != nil {
+		return fmt.Errorf("failed to drop collection: %w", err)
+	}
 
-	return r.save()
+	if len(rules) == 0 {
+		return nil
+	}
+
+	docs := make([]interface{}, len(rules))
+	for i, rule := range rules {
+		docs[i] = rule
+	}
+
+	_, err := r.collection.InsertMany(ctx, docs)
+	if err != nil {
+		return fmt.Errorf("failed to insert rules: %w", err)
+	}
+
+	return nil
 }
 
 func (r *RulesRepository) AddRule(name, pattern string) (*Rule, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
 	rule := Rule{
-		ID:      uuid.New().String(),
+		ID:      generateID(),
 		Name:    name,
 		Pattern: pattern,
 	}
 
-	r.rules.Rules = append(r.rules.Rules, rule)
-	if err := r.save(); err != nil {
-		return nil, err
+	_, err := r.collection.InsertOne(ctx, rule)
+	if err != nil {
+		return nil, fmt.Errorf("failed to insert rule: %w", err)
 	}
 
 	return &rule, nil
 }
 
 func (r *RulesRepository) RemoveRule(id string) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-	for i, rule := range r.rules.Rules {
-		if rule.ID == id {
-			r.rules.Rules = append(r.rules.Rules[:i], r.rules.Rules[i+1:]...)
-			return r.save()
-		}
+	result, err := r.collection.DeleteOne(ctx, bson.M{"_id": id})
+	if err != nil {
+		return fmt.Errorf("failed to delete rule: %w", err)
 	}
 
-	return fmt.Errorf("rule not found: %s", id)
+	if result.DeletedCount == 0 {
+		return fmt.Errorf("rule not found: %s", id)
+	}
+
+	return nil
 }
 
-func (r *RulesRepository) GetPatterns() []string {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+func (r *RulesRepository) GetPatterns() ([]string, error) {
+	rules, err := r.GetRules()
+	if err != nil {
+		return nil, err
+	}
 
-	patterns := make([]string, len(r.rules.Rules))
-	for i, rule := range r.rules.Rules {
+	patterns := make([]string, len(rules))
+	for i, rule := range rules {
 		patterns[i] = rule.Pattern
 	}
-	return patterns
+
+	return patterns, nil
+}
+
+func (r *RulesRepository) Close() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	return r.client.Disconnect(ctx)
+}
+
+func generateID() string {
+	return uuid.New().String()
 }

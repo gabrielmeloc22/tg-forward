@@ -9,6 +9,7 @@ import (
 type Config struct {
 	Telegram TelegramConfig
 	API      APIConfig
+	MongoDB  MongoDBConfig
 }
 
 type TelegramConfig struct {
@@ -32,6 +33,11 @@ type BotConfig struct {
 type APIConfig struct {
 	Port  string
 	Token string
+}
+
+type MongoDBConfig struct {
+	URI      string
+	Database string
 }
 
 func Load() (*Config, error) {
@@ -60,6 +66,9 @@ func Load() (*Config, error) {
 
 	cfg.API.Port = getEnv("API_PORT", "8080")
 	cfg.API.Token = getEnv("API_TOKEN", "")
+
+	cfg.MongoDB.URI = getEnv("MONGO_URI", "mongodb://localhost:27017")
+	cfg.MongoDB.Database = getEnv("MONGO_DATABASE", "tg-forward")
 
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
@@ -93,6 +102,10 @@ func (c *Config) Validate() error {
 	}
 	if c.API.Token == "" {
 		return fmt.Errorf("api.token is required")
+	}
+
+	if c.MongoDB.URI == "" {
+		return fmt.Errorf("mongodb.uri is required")
 	}
 
 	return nil

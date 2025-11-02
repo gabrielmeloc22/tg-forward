@@ -1,25 +1,72 @@
 package router_test
 
 import (
+	"context"
 	"net/http"
 	"testing"
 
+	"github.com/gabrielmelo/tg-forward/internal/api/router"
 	"github.com/gabrielmelo/tg-forward/internal/api/serializer"
 	"github.com/gabrielmelo/tg-forward/internal/api/types"
+	"github.com/gabrielmelo/tg-forward/internal/matcher"
 	"github.com/gabrielmelo/tg-forward/internal/repository"
+	"github.com/gabrielmelo/tg-forward/internal/service"
 	"github.com/gabrielmelo/tg-forward/internal/testutils"
+	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go/modules/mongodb"
 )
 
-func TestHealthEndpoint(t *testing.T) {
-	t.Parallel()
+const testAPIToken = "test-api-token-12345"
 
-	fixture := testutils.NewFixture(t, nil)
+func setupTestDB(t *testing.T) (*repository.RulesRepository, func()) {
+	ctx := context.Background()
+
+	mongodbContainer, err := mongodb.Run(ctx, "mongo:6")
+	require.NoError(t, err)
+
+	uri, err := mongodbContainer.ConnectionString(ctx)
+	require.NoError(t, err)
+
+	repo, err := repository.NewRulesRepository(uri, "testdb", "rules")
+	require.NoError(t, err)
+
+	cleanup := func() {
+		repo.Close()
+		mongodbContainer.Terminate(ctx)
+	}
+
+	return repo, cleanup
+}
+
+func setupRouter(t *testing.T, initialPatterns []string) (*chi.Mux, *repository.RulesRepository, func()) {
+	repo, cleanup := setupTestDB(t)
+
+	for _, pattern := range initialPatterns {
+		_, err := repo.AddRule("test-rule", pattern)
+		require.NoError(t, err)
+	}
+
+	patterns, err := repo.GetPatterns()
+	require.NoError(t, err)
+
+	m, err := matcher.New(patterns)
+	require.NoError(t, err)
+
+	svc := service.NewRulesService(repo, m)
+	r := router.New(svc, testAPIToken)
+
+	return r, repo, cleanup
+}
+
+func TestHealthEndpoint(t *testing.T) {
+	r, _, cleanup := setupRouter(t, nil)
+	defer cleanup()
 
 	t.Run("should return ok status without authentication", func(t *testing.T) {
 		req := testutils.NewRequest(t, "GET", "/health", nil)
 
-		res := testutils.ExecuteRequest(req, fixture.Router)
+		res := testutils.ExecuteRequest(req, r)
 
 		body := testutils.UnmarshallReqBody[types.DataResponse](t, res.Body)
 
@@ -31,14 +78,13 @@ func TestHealthEndpoint(t *testing.T) {
 }
 
 func TestAuthenticationMiddleware(t *testing.T) {
-	t.Parallel()
-
-	fixture := testutils.NewFixture(t, nil)
+	r, _, cleanup := setupRouter(t, nil)
+	defer cleanup()
 
 	t.Run("should return 401 when no token provided", func(t *testing.T) {
 		req := testutils.NewRequest(t, "GET", "/rules", nil)
 
-		res := testutils.ExecuteRequest(req, fixture.Router)
+		res := testutils.ExecuteRequest(req, r)
 
 		body := testutils.UnmarshallReqBody[serializer.ApiErrorResponse](t, res.Body)
 
@@ -49,7 +95,7 @@ func TestAuthenticationMiddleware(t *testing.T) {
 	t.Run("should return 401 when invalid token provided", func(t *testing.T) {
 		req := testutils.NewAuthenticatedRequest(t, "GET", "/rules", nil, "wrong-token")
 
-		res := testutils.ExecuteRequest(req, fixture.Router)
+		res := testutils.ExecuteRequest(req, r)
 
 		body := testutils.UnmarshallReqBody[serializer.ApiErrorResponse](t, res.Body)
 
@@ -58,24 +104,23 @@ func TestAuthenticationMiddleware(t *testing.T) {
 	})
 
 	t.Run("should return 200 when valid token provided", func(t *testing.T) {
-		req := testutils.NewAuthenticatedRequest(t, "GET", "/rules", nil, testutils.TestAPIToken)
+		req := testutils.NewAuthenticatedRequest(t, "GET", "/rules", nil, testAPIToken)
 
-		res := testutils.ExecuteRequest(req, fixture.Router)
+		res := testutils.ExecuteRequest(req, r)
 
 		require.Equal(t, http.StatusOK, res.Code)
 	})
 }
 
 func TestGetRulesHandler(t *testing.T) {
-	t.Parallel()
-
 	initialPatterns := []string{"test.*", "urgent", "important"}
-	fixture := testutils.NewFixture(t, initialPatterns)
+	r, _, cleanup := setupRouter(t, initialPatterns)
+	defer cleanup()
 
 	t.Run("should return all rules", func(t *testing.T) {
-		req := testutils.NewAuthenticatedRequest(t, "GET", "/rules", nil, testutils.TestAPIToken)
+		req := testutils.NewAuthenticatedRequest(t, "GET", "/rules", nil, testAPIToken)
 
-		res := testutils.ExecuteRequest(req, fixture.Router)
+		res := testutils.ExecuteRequest(req, r)
 
 		body := testutils.UnmarshallReqBody[types.DataResponse](t, res.Body)
 
@@ -90,11 +135,12 @@ func TestGetRulesHandler(t *testing.T) {
 	})
 
 	t.Run("should return empty array when no rules exist", func(t *testing.T) {
-		emptyFixture := testutils.NewFixture(t, nil)
+		emptyR, _, emptyCleanup := setupRouter(t, nil)
+		defer emptyCleanup()
 
-		req := testutils.NewAuthenticatedRequest(t, "GET", "/rules", nil, testutils.TestAPIToken)
+		req := testutils.NewAuthenticatedRequest(t, "GET", "/rules", nil, testAPIToken)
 
-		res := testutils.ExecuteRequest(req, emptyFixture.Router)
+		res := testutils.ExecuteRequest(req, emptyR)
 
 		body := testutils.UnmarshallReqBody[types.DataResponse](t, res.Body)
 
@@ -110,10 +156,9 @@ func TestGetRulesHandler(t *testing.T) {
 }
 
 func TestAddRuleHandler(t *testing.T) {
-	t.Parallel()
-
 	initialPatterns := []string{"test.*"}
-	fixture := testutils.NewFixture(t, initialPatterns)
+	r, _, cleanup := setupRouter(t, initialPatterns)
+	defer cleanup()
 
 	t.Run("should add new rule", func(t *testing.T) {
 		reqBody := types.AddRuleRequest{Name: "Important Messages", Pattern: "important.*"}
@@ -123,10 +168,10 @@ func TestAddRuleHandler(t *testing.T) {
 			"POST",
 			"/rules/add",
 			testutils.MarshallBody(t, reqBody),
-			testutils.TestAPIToken,
+			testAPIToken,
 		)
 
-		res := testutils.ExecuteRequest(req, fixture.Router)
+		res := testutils.ExecuteRequest(req, r)
 
 		body := testutils.UnmarshallReqBody[types.DataResponse](t, res.Body)
 
@@ -150,10 +195,10 @@ func TestAddRuleHandler(t *testing.T) {
 			"POST",
 			"/rules/add",
 			testutils.MarshallBody(t, reqBody),
-			testutils.TestAPIToken,
+			testAPIToken,
 		)
 
-		res := testutils.ExecuteRequest(req, fixture.Router)
+		res := testutils.ExecuteRequest(req, r)
 
 		body := testutils.UnmarshallReqBody[serializer.ApiErrorResponse](t, res.Body)
 
@@ -169,10 +214,10 @@ func TestAddRuleHandler(t *testing.T) {
 			"POST",
 			"/rules/add",
 			testutils.MarshallBody(t, reqBody),
-			testutils.TestAPIToken,
+			testAPIToken,
 		)
 
-		res := testutils.ExecuteRequest(req, fixture.Router)
+		res := testutils.ExecuteRequest(req, r)
 
 		body := testutils.UnmarshallReqBody[serializer.ApiErrorResponse](t, res.Body)
 
@@ -182,13 +227,13 @@ func TestAddRuleHandler(t *testing.T) {
 }
 
 func TestRemoveRuleHandler(t *testing.T) {
-	t.Parallel()
-
 	initialPatterns := []string{"test.*", "urgent"}
-	fixture := testutils.NewFixture(t, initialPatterns)
+	r, repo, cleanup := setupRouter(t, initialPatterns)
+	defer cleanup()
 
 	t.Run("should remove existing rule", func(t *testing.T) {
-		rules := fixture.Repo.GetRules()
+		rules, err := repo.GetRules()
+		require.NoError(t, err)
 		require.NotEmpty(t, rules)
 
 		ruleToRemove := rules[0]
@@ -200,10 +245,10 @@ func TestRemoveRuleHandler(t *testing.T) {
 			"DELETE",
 			"/rules/remove",
 			testutils.MarshallBody(t, reqBody),
-			testutils.TestAPIToken,
+			testAPIToken,
 		)
 
-		res := testutils.ExecuteRequest(req, fixture.Router)
+		res := testutils.ExecuteRequest(req, r)
 
 		body := testutils.UnmarshallReqBody[types.DataResponse](t, res.Body)
 
@@ -213,7 +258,8 @@ func TestRemoveRuleHandler(t *testing.T) {
 		require.True(t, ok)
 		require.Equal(t, "rule deleted successfully", dataMap["message"])
 
-		remainingRules := fixture.Repo.GetRules()
+		remainingRules, err := repo.GetRules()
+		require.NoError(t, err)
 		require.Equal(t, len(rules)-1, len(remainingRules))
 	})
 
@@ -225,10 +271,10 @@ func TestRemoveRuleHandler(t *testing.T) {
 			"DELETE",
 			"/rules/remove",
 			testutils.MarshallBody(t, reqBody),
-			testutils.TestAPIToken,
+			testAPIToken,
 		)
 
-		res := testutils.ExecuteRequest(req, fixture.Router)
+		res := testutils.ExecuteRequest(req, r)
 
 		body := testutils.UnmarshallReqBody[serializer.ApiErrorResponse](t, res.Body)
 
@@ -238,9 +284,8 @@ func TestRemoveRuleHandler(t *testing.T) {
 }
 
 func TestUpdateRulesHandler(t *testing.T) {
-	t.Parallel()
-
-	fixture := testutils.NewFixture(t, []string{"old.*"})
+	r, _, cleanup := setupRouter(t, []string{"old.*"})
+	defer cleanup()
 
 	t.Run("should update rules with valid rules", func(t *testing.T) {
 		newRules := []repository.Rule{
@@ -254,10 +299,10 @@ func TestUpdateRulesHandler(t *testing.T) {
 			"PUT",
 			"/rules",
 			testutils.MarshallBody(t, reqBody),
-			testutils.TestAPIToken,
+			testAPIToken,
 		)
 
-		res := testutils.ExecuteRequest(req, fixture.Router)
+		res := testutils.ExecuteRequest(req, r)
 
 		body := testutils.UnmarshallReqBody[types.DataResponse](t, res.Body)
 
@@ -281,10 +326,10 @@ func TestUpdateRulesHandler(t *testing.T) {
 			"PUT",
 			"/rules",
 			testutils.MarshallBody(t, reqBody),
-			testutils.TestAPIToken,
+			testAPIToken,
 		)
 
-		res := testutils.ExecuteRequest(req, fixture.Router)
+		res := testutils.ExecuteRequest(req, r)
 
 		body := testutils.UnmarshallReqBody[serializer.ApiErrorResponse](t, res.Body)
 
@@ -300,10 +345,10 @@ func TestUpdateRulesHandler(t *testing.T) {
 			"PUT",
 			"/rules",
 			testutils.MarshallBody(t, reqBody),
-			testutils.TestAPIToken,
+			testAPIToken,
 		)
 
-		res := testutils.ExecuteRequest(req, fixture.Router)
+		res := testutils.ExecuteRequest(req, r)
 
 		body := testutils.UnmarshallReqBody[serializer.ApiErrorResponse](t, res.Body)
 

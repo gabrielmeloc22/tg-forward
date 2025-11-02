@@ -21,7 +21,8 @@ func NewRulesService(repo *repository.RulesRepository, m *matcher.Matcher) *Rule
 }
 
 func (s *RulesService) GetRules() []repository.Rule {
-	return s.repo.GetRules()
+	rules, _ := s.repo.GetRules()
+	return rules
 }
 
 func (s *RulesService) UpdateRules(rules []repository.Rule) ([]repository.Rule, error) {
@@ -64,7 +65,7 @@ func (s *RulesService) AddRule(name, pattern string) (*repository.Rule, error) {
 		return nil, fmt.Errorf("failed to add rule: %w", err)
 	}
 
-	patterns := s.repo.GetPatterns()
+	patterns, _ := s.repo.GetPatterns()
 	newMatcher, err := matcher.New(patterns)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update matcher: %w", err)
@@ -79,7 +80,7 @@ func (s *RulesService) RemoveRule(id string) error {
 		return err
 	}
 
-	patterns := s.repo.GetPatterns()
+	patterns, _ := s.repo.GetPatterns()
 	newMatcher, err := matcher.New(patterns)
 	if err != nil {
 		return fmt.Errorf("failed to update matcher: %w", err)
