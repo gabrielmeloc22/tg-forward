@@ -89,6 +89,29 @@ func (c *Client) Run(ctx context.Context, appID int, appHash string) error {
 		return nil
 	})
 
+	dispatcher.OnNewChannelMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateNewChannelMessage) error {
+		msg, ok := update.Message.(*tg.Message)
+		if !ok {
+			return nil
+		}
+
+		if msg.Out {
+			return nil
+		}
+
+		if peerUser, ok := msg.FromID.(*tg.PeerUser); ok {
+			if peerUser.UserID == c.botID {
+				log.Printf("Ignoring channel message from bot (ID: %d)", c.botID)
+				return nil
+			}
+		}
+
+		if c.handler != nil {
+			return c.handler(ctx, msg)
+		}
+		return nil
+	})
+
 	return client.Run(ctx, func(ctx context.Context) error {
 		authStatus, err := c.client.Auth().Status(ctx)
 		if err != nil {
