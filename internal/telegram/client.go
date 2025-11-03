@@ -66,29 +66,6 @@ func (c *Client) Run(ctx context.Context, appID int, appHash string) error {
 	})
 	c.client = client
 
-	dispatcher.OnNewMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateNewMessage) error {
-		msg, ok := update.Message.(*tg.Message)
-		if !ok {
-			return nil
-		}
-
-		if msg.Out {
-			return nil
-		}
-
-		if peerUser, ok := msg.FromID.(*tg.PeerUser); ok {
-			if peerUser.UserID == c.botID {
-				log.Printf("Ignoring message from bot (ID: %d)", c.botID)
-				return nil
-			}
-		}
-
-		if c.handler != nil {
-			return c.handler(ctx, msg)
-		}
-		return nil
-	})
-
 	dispatcher.OnNewChannelMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateNewChannelMessage) error {
 		msg, ok := update.Message.(*tg.Message)
 		if !ok {
