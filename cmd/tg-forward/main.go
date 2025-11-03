@@ -103,7 +103,7 @@ func main() {
 		mu.RUnlock()
 
 		if currentMatcher.Match(text) {
-			log.Printf("Message matched pattern, forwarding: %s", text)
+			log.Printf("Message matched pattern, forwarding")
 			if err := bot.ForwardMessage(text); err != nil {
 				log.Printf("Failed to forward message: %v", err)
 				return err
